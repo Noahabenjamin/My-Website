@@ -176,6 +176,28 @@
   #intro-skip:hover { background: rgba(255,255,255,0.16); }
   #intro-overlay.hidden { opacity: 0; pointer-events: none; transition: opacity 0.6s ease-out; }
   #intro-overlay.gone   { display: none; }
+  /* Skip-to-cobble pill shown only during the underwater scene */
+  #psych-skip {
+    position: fixed; bottom: 24px; right: 24px;
+    z-index: 36;
+    padding: 8px 18px;
+    background: rgba(255,255,255,0.10);
+    color: #f5efe2;
+    border: 1px solid rgba(245,239,226,0.5);
+    border-radius: 999px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 16px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    user-select: none;
+    display: none;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: opacity 0.3s ease-out, background 0.2s;
+  }
+  #psych-skip:hover { background: rgba(255,255,255,0.20); }
 </style>
 </head>
 <body tabindex="-1">
@@ -190,6 +212,8 @@
   <button id="intro-start" type="button">tap to begin</button>
   <button id="intro-skip" type="button">skip →</button>
 </div>
+<!-- Skip-to-cobble button shown only during the underwater (psych) scene. -->
+<button id="psych-skip" type="button">skip →</button>
 <div id="vignette"></div>
 <div id="hint">use W A S D or arrow keys to move</div>
 <div id="beach-back" aria-label="back to cobble world"><span>b</span><span>a</span><span>c</span><span>k</span><span>.</span><span>.</span><span>.</span></div>
@@ -2547,10 +2571,12 @@ function buildBeachScene() {
 // ==========================================================================
 
 function buildLinkedInLogoCanvas() {
-  // Faithful "LinkedIn in" mark in pure black & white.
-  //   * black square tile with the brand's ~18% corner radius
-  //   * white lowercase "in" with the correct proportions, kerning and the
-  //     dot positioned squarely above the i-stem.
+  // Faithful "LinkedIn in" mark (Wikimedia Commons reference), B&W.
+  //   * Black rounded square tile (~18 % corner radius)
+  //   * White lowercase "in" with:
+  //       - i: square dot + thick vertical stem
+  //       - n: two stems joined by a semi-circular arch (annulus half)
+  //   * Letter strokes have slightly rounded ends to match the brand
   const SIZE = 1024;
   const c = document.createElement('canvas');
   c.width = SIZE; c.height = SIZE;
@@ -2571,55 +2597,60 @@ function buildLinkedInLogoCanvas() {
     ctx.closePath();
   }
 
-  // 1) Black tile with the brand's ~18 % corner radius (B&W of the blue square)
-  const cornerR = SIZE * 0.18;
+  // 1) Black tile with the brand's ~18 % corner radius
+  const cornerR = SIZE * 0.180;
   ctx.fillStyle = '#000000';
   roundedRect(0, 0, SIZE, SIZE, cornerR);
   ctx.fill();
 
-  // 2) White "in" — geometry tuned to match the real wordmark proportions
+  // 2) White "in".  These ratios come from measuring the canonical mark:
+  //    - stroke width ≈ 14% of tile
+  //    - dot sits ≈ 22% from top, sized = stroke
+  //    - stems run from 41% to 79% of tile height
+  //    - "i" centre at 30%, "n" left edge at 48% (so the two letters share
+  //      the visual center of the square)
   ctx.fillStyle = '#ffffff';
 
-  const stroke    = SIZE * 0.135;     // letter stroke thickness
-  const stemTop   = SIZE * 0.42;      // top of "i" stem and "n" stems
-  const baseY     = SIZE * 0.78;      // baseline
-  const stemH     = baseY - stemTop;
-  const cornerLetter = SIZE * 0.020;   // tiny corner radius on the strokes
+  const stroke      = SIZE * 0.140;
+  const stemTop     = SIZE * 0.410;
+  const baseY       = SIZE * 0.790;
+  const stemH       = baseY - stemTop;
+  const strokeR     = SIZE * 0.012;     // tiny rounding on stroke ends
 
   // ---- "i" ----
-  const iX = SIZE * 0.295;            // centre of i column
-  // dot — square with subtle rounding, sitting just above the stem
+  const iX = SIZE * 0.305;
+  // dot — perfect square (with a hair of rounding) sized = stroke width
   const dotSize = stroke;
-  const dotY    = SIZE * 0.235;
+  const dotY    = SIZE * 0.225;
   ctx.beginPath();
-  roundedRect(iX - dotSize / 2, dotY, dotSize, dotSize, cornerLetter);
+  roundedRect(iX - dotSize / 2, dotY, dotSize, dotSize, strokeR);
   ctx.fill();
-  // i stem
+  // stem
   ctx.beginPath();
-  roundedRect(iX - stroke / 2, stemTop, stroke, stemH, cornerLetter);
+  roundedRect(iX - stroke / 2, stemTop, stroke, stemH, strokeR);
   ctx.fill();
 
   // ---- "n" ----
-  const nLeft  = SIZE * 0.480;
-  const nWidth = SIZE * 0.330;
-  const humpOuterR = nWidth / 2;
-  const humpInnerR = humpOuterR - stroke;
-  const humpCx = nLeft + humpOuterR;
-  const humpCy = stemTop;             // hump centre coincides with stem top
+  const nLeft   = SIZE * 0.482;
+  const nWidth  = SIZE * 0.328;
+  const humpR_O = nWidth / 2;            // outer hump radius
+  const humpR_I = humpR_O - stroke;      // inner hump radius
+  const humpCx  = nLeft + humpR_O;
+  const humpCy  = stemTop;               // bottom of hump aligns with stem tops
 
-  // left stem of n
+  // left stem
   ctx.beginPath();
-  roundedRect(nLeft, stemTop, stroke, stemH, cornerLetter);
+  roundedRect(nLeft, stemTop, stroke, stemH, strokeR);
   ctx.fill();
-  // right stem of n
+  // right stem
   ctx.beginPath();
-  roundedRect(nLeft + nWidth - stroke, stemTop, stroke, stemH, cornerLetter);
+  roundedRect(nLeft + nWidth - stroke, stemTop, stroke, stemH, strokeR);
   ctx.fill();
-  // arched hump connecting the two stems (annulus half over the top)
+  // arched hump (annulus half over the top of the two stems)
   ctx.beginPath();
-  ctx.arc(humpCx, humpCy, humpOuterR, 0,         Math.PI, true);
-  ctx.lineTo(humpCx - humpInnerR, humpCy);
-  ctx.arc(humpCx, humpCy, humpInnerR, Math.PI,   2 * Math.PI, false);
+  ctx.arc(humpCx, humpCy, humpR_O, 0,        Math.PI, true);
+  ctx.lineTo(humpCx - humpR_I, humpCy);
+  ctx.arc(humpCx, humpCy, humpR_I, Math.PI,  2 * Math.PI, false);
   ctx.closePath();
   ctx.fill();
 
@@ -2733,12 +2764,13 @@ function buildExitSign(arrowDir = 'left') {
   });
 
   // Tall legs that raise the panel above Baymax's head level
+  const LEG_HEIGHT = 3.0;
   for (const x of [-0.45, 0.45]) {
     const leg = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.028, 0.028, 2.2, 12),
+      new THREE.CylinderGeometry(0.028, 0.028, LEG_HEIGHT, 12),
       darkMetalMat
     );
-    leg.position.set(x, 1.10, 0);
+    leg.position.set(x, LEG_HEIGHT / 2, 0);
     leg.castShadow = true;
     g.add(leg);
     const foot = new THREE.Mesh(
@@ -2748,13 +2780,13 @@ function buildExitSign(arrowDir = 'left') {
     foot.position.set(x, 0.014, 0);
     g.add(foot);
   }
-  // crossbar between the legs at panel height
+  // crossbar between the legs near the top
   const crossbar = new THREE.Mesh(
     new THREE.CylinderGeometry(0.02, 0.02, 0.95, 12),
     darkMetalMat
   );
   crossbar.rotation.z = Math.PI / 2;
-  crossbar.position.set(0, 2.10, 0);
+  crossbar.position.set(0, LEG_HEIGHT - 0.10, 0);
   g.add(crossbar);
 
   // Sign canvas — larger so the "exit" text renders crisp
@@ -2816,15 +2848,13 @@ function buildExitSign(arrowDir = 'left') {
   // the top-down camera (which sits high above and slightly +Z of origin)
   const panelMats = [metalMat, metalMat, metalMat, metalMat, faceMat, metalMat];
   const panel = new THREE.Mesh(new THREE.BoxGeometry(1.50, 0.78, 0.06), panelMats);
-  panel.position.set(0, 2.55, 0);   // mounted high above Baymax's head
-  // Tilt the panel back ~50° so the +Z face angles up toward the camera.
-  panel.rotation.x = -0.85;
+  panel.position.set(0, LEG_HEIGHT + 0.30, 0);   // perched on top of the legs
+  // Only a light backward tilt — keeps the sign reading as VERTICAL while
+  // angling the face just enough that the top-down camera can still read it.
+  panel.rotation.x = -0.30;
   panel.castShadow = true;
   panel.receiveShadow = true;
   g.add(panel);
-
-  // The panel's +Z face (after tilt) now points up-and-slightly-+Z, which the
-  // top-down camera at (0.6, 16, 3.5) can read straight on for both scenes.
 
   return g;
 }
@@ -3115,14 +3145,14 @@ function buildCaveScene() {
   }
   scene.add(crystalGroup);
 
-  // -- exit sign — sits in the TOP-RIGHT corner of the cave (the only way
+  // -- exit sign — sits in the BOTTOM-LEFT corner of the cave (the only way
   // out, back to the cobble world).  Same mesh used by the art / projects
   // worlds so it reads as part of the same series.  Positioned just inside
   // the rock-column ring so it's clearly visible and reachable.
-  const exitSign = buildExitSign('right');
-  exitSign.position.set(7.2, 0, -7.2);
-  // facing back into the cave so Baymax (approaching from -X+Z) can read it
-  exitSign.rotation.y = -Math.PI / 4;
+  const exitSign = buildExitSign('left');
+  exitSign.position.set(-7.2, 0, 7.2);
+  // facing back into the cave so Baymax (approaching from +X-Z) can read it
+  exitSign.rotation.y = (3 * Math.PI) / 4;
   scene.add(exitSign);
 
   // -- baymax --
@@ -3146,7 +3176,7 @@ function buildCaveScene() {
     mushrooms,
     crystalGroup,
     torchLight: torch,
-    exitSignPos: new THREE.Vector3(7.2, 0, -7.2),
+    exitSignPos: new THREE.Vector3(-7.2, 0, 7.2),
   };
 }
 
@@ -4054,10 +4084,7 @@ html { scroll-behavior: smooth; }
     beachBackEl.style.display = 'none';
     for (const s of beachBackSpans) s.style.opacity = '0';
   }
-  beachBackEl.addEventListener('click', () => {
-    if (stage !== 'beach' || !beach.satMarked) return;
-    if (!beach.backOpacities.some(o => o > 0.25)) return;
-
+  function exitBeachToCobble() {
     // reset beach state so a future visit replays the sequence
     beach.phase = 'enter';
     beach.phaseT = 0;
@@ -4080,7 +4107,42 @@ html { scroll-behavior: smooth; }
     cobblestone.landed     = true;
     cobblestone.landT      = COBBLE_FALL_OVER + COBBLE_LIE + COBBLE_RISE + 1.0;
     setStage('cobble');
+  }
+  beachBackEl.addEventListener('click', () => {
+    if (stage !== 'beach' || !beach.satMarked) return;
+    if (!beach.backOpacities.some(o => o > 0.25)) return;
+    exitBeachToCobble();
   });
+
+  // Skip-to-cobble button shown only during the psych (underwater) stage.
+  // One click → jump straight to the controllable cobble world, bypassing
+  // the fall-over → lie → rise cinematic.
+  const psychSkipEl = document.getElementById('psych-skip');
+  if (psychSkipEl) {
+    psychSkipEl.addEventListener('click', () => {
+      if (stage !== 'psych') return;
+      // Place Baymax cleanly standing at the centre of the cobble world.
+      const cb = cobblestone.baymax;
+      cb.rotation.set(0, 0, 0);
+      cb.position.set(0, 0, 0);
+      cb.scale.setScalar(BAYMAX_SCALE);
+      resetWalk(cb);
+      resetHead(cb);
+      // Mark the landing cinematic as fully complete + show the nav words.
+      cobblestone.landed     = true;
+      cobblestone.landT      = COBBLE_FALL_OVER + COBBLE_LIE + COBBLE_RISE + 1.2;
+      cobblestone.entering   = false;
+      cobblestone.entryT     = 0;
+      cobblestone.exited     = false;
+      cobblestone.wordsShown = true;
+      const w = document.getElementById('words');
+      if (w) {
+        w.classList.remove('instant-off');
+        w.classList.add('visible');
+      }
+      setStage('cobble');
+    });
+  }
 
   const vignette = document.getElementById('vignette');
   const hint     = document.getElementById('hint');
@@ -4137,6 +4199,8 @@ html { scroll-behavior: smooth; }
           if (crate.gameTargets) for (const t of crate.gameTargets) t.visible = false;
         }
       }
+      // ensure outer Baymax is visible again (he gets hidden during box view)
+      if (projectsWorld.baymax) projectsWorld.baymax.visible = true;
       hideGameScoreUI();
     }
 
@@ -4154,7 +4218,11 @@ html { scroll-behavior: smooth; }
         w.classList.add('visible');
       }
       flashCut();
-    } else if (name === 'beach' || name === 'linkedin' ||
+    }
+
+    // Show / hide the psych "skip →" pill based on the current stage.
+    const psychSkipEl = document.getElementById('psych-skip');
+    if (psychSkipEl) psychSkipEl.style.display = (name === 'psych') ? 'block' : 'none'; else if (name === 'beach' || name === 'linkedin' ||
                name === 'art'   || name === 'projects' ||
                name === 'cave') {
       // INSTANT hide of the four nav words (no fade) on portal entry
@@ -4885,10 +4953,10 @@ html { scroll-behavior: smooth; }
     }
     linkedin.ringMat.uniforms.uProgress.value = linkedin.progress;
 
-    // full circle → redirect once
+    // full circle → open the LinkedIn profile in a new tab (once)
     if (linkedin.progress >= 1 && !linkedin.redirected) {
       linkedin.redirected = true;
-      window.location.href = LINKEDIN_URL;
+      window.open(LINKEDIN_URL, '_blank', 'noopener');
     }
   }
 
@@ -5076,23 +5144,27 @@ html { scroll-behavior: smooth; }
     // ---- BOX (CRATE) VIEW STATE ----
     if (projectsWorld.boxActive) {
       const crate = projectsWorld.activeCrate;
-      // park the outer baymax outside the crate (face the box from +Z)
+      // park the outer baymax outside the crate AND hide him so his body
+      // doesn't fill the box-view camera (the bigger crates have the camera
+      // close enough that Baymax otherwise blocks the whole interior).
       b.position.set(crate.data.x, 0, crate.data.z + 0.95);
       b.rotation.set(0, Math.PI, 0);
+      b.visible = false;
       resetWalk(b);
       resetHead(b);
 
-      // camera looks into the crate from the +Z side, angled slightly down
-      // so the mini Baymax (standing on the inner floor) is centred in view
+      // Camera looks DOWN into the crate from above and slightly south of
+      // the open front face.  Look-at is just past the back wall so the
+      // entire interior (floor → back) sits inside the frame.
       const targetCamPos = new THREE.Vector3(
         crate.data.x,
-        crate.data.s * 0.85,
-        crate.data.z + crate.data.s / 2 + crate.data.s * 1.05
+        crate.data.s * 1.55,                                   // above the crate
+        crate.data.z + crate.data.s / 2 + crate.data.s * 0.55  // outside the front face
       );
       const targetLookAt = new THREE.Vector3(
         crate.data.x,
-        crate.data.s * 0.30,
-        crate.data.z
+        crate.data.s * 0.10,                                   // near the inner floor
+        crate.data.z - crate.data.s * 0.05
       );
       const k = 1 - Math.pow(0.001, dt);
       projectsWorld.camPos.lerp(targetCamPos, k);
@@ -5172,6 +5244,7 @@ html { scroll-behavior: smooth; }
           // restore the front face material
           if (crate.frontMat) crate.crateMesh.material[4] = crate.frontMat;
           crate.interior.visible = false;
+          b.visible = true;                       // re-show outer Baymax
           projectsPromptEl.textContent = 'click e';
           // hide whack-a-mole score / clear active target
           if (crate.gameTargets) {
@@ -5334,8 +5407,10 @@ html { scroll-behavior: smooth; }
         if (!projectsWorld.eHeld) {
           if (near.type === 'laptop') {
             projectsWorld.computerActive = true;
-            // The iframe is a 2D overlay; it scrolls naturally with the
-            // touchpad whenever the cursor is over it.
+            // Also open the real site in a new tab so the user can browse
+            // it without leaving the scene.  Wrapped in try/catch so popup
+            // blockers don't break the rest of the flow.
+            try { window.open('https://www.paattikiiltoon.fi/', '_blank', 'noopener'); } catch (_) {}
           } else if (near.type === 'box') {
             // open this crate's interior
             projectsWorld.boxActive = true;
@@ -5512,6 +5587,13 @@ html { scroll-behavior: smooth; }
     beach.phaseT += dt;
     beach.water.mat.uniforms.uTime.value += dt;
 
+    // ESC exits the beach (mirrors clicking the "back..." overlay).
+    if (beach.satMarked && keys['escape']) {
+      exitBeachToCobble();
+      keys['escape'] = false;
+      return;
+    }
+
     // drift the thin distant clouds slowly across the sky
     if (beach.clouds && beach.clouds.userData.clouds) {
       for (const cloud of beach.clouds.userData.clouds) {
@@ -5665,14 +5747,28 @@ html { scroll-behavior: smooth; }
       c.position.copy(handWorld);
       c.rotation.z = -0.45;
       if (u >= 1) { beach.phase = 'idle'; beach.phaseT = 0; }
+    } else if (beach.phase === 'sip') {
+      // Periodic sip: arm + cocktail are already raised near the mouth, so
+      // we just tilt the head back briefly and bring it forward again.
+      const dur = 1.1;
+      const u = Math.min(1, beach.phaseT / dur);
+      const tri = u < 0.5 ? u * 2 : (1 - u) * 2;        // triangle 0→1→0
+      const eased = tri * tri * (3 - 2 * tri);
+      if (b.userData.head) b.userData.head.rotation.x = -0.05 - 0.30 * eased;
+      const handWorld = getHandWorld('leftArm', new THREE.Vector3(0, -0.10, 0));
+      c.position.copy(handWorld);
+      c.rotation.z = -0.45;
+      if (u >= 1) { beach.phase = 'idle'; beach.phaseT = 0; }
     } else {
-      // idle — gentle breathing wobble; cocktail still in his hand
+      // idle — gentle breathing wobble; cocktail still in his hand.  Every
+      // 8 seconds Baymax takes another sip.
       const t = beach.phaseT;
       if (b.userData.head) b.userData.head.rotation.set(-0.05, Math.sin(t * 0.6) * 0.18, 0);
       const handWorld = getHandWorld('leftArm', new THREE.Vector3(0, -0.10, 0));
       handWorld.y += Math.sin(t * 1.2) * 0.012;
       c.position.copy(handWorld);
       c.rotation.z = -0.45;
+      if (beach.phaseT >= 8.0) { beach.phase = 'sip'; beach.phaseT = 0; }
     }
 
     // ---- "back..." HTML overlay — per-letter fade-in, then dot-cycle ----
