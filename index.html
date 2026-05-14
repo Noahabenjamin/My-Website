@@ -1236,34 +1236,43 @@ function _getAudioCtx() {
 function playFootstep() {
   const actx = _getAudioCtx();
   if (!actx) return;
-  // Soft, playful "boop": triangle wave at a major-pentatonic pitch that
-  // gently dips down a third over ~80ms.  Each step picks a different note
-  // so consecutive steps sound like a tiny tune.
+  // Soft mix of a kick body + water-drop plink, layered for a cute step
+  // sound.  Both voices use sine waves with quick pitch drops; volumes
+  // dialled low so the overall feel stays gentle.
   const now = actx.currentTime;
-  const pentatonic = [392.00, 440.00, 493.88, 587.33, 659.25];   // G4 A4 B4 D5 E5
-  const f0 = pentatonic[Math.floor(Math.random() * pentatonic.length)];
-  const f1 = f0 * 0.82;
 
-  // Triangle body — warmer + softer than sine kick
-  const osc = actx.createOscillator();
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(f0, now);
-  osc.frequency.exponentialRampToValueAtTime(f1, now + 0.08);
+  // ----- Kick body (the thump) -----
+  const kickF0 = 130 + Math.random() * 22;          // ~130–152 Hz
+  const kickOsc = actx.createOscillator();
+  kickOsc.type = 'sine';
+  kickOsc.frequency.setValueAtTime(kickF0, now);
+  kickOsc.frequency.exponentialRampToValueAtTime(46, now + 0.10);
+  const kickGain = actx.createGain();
+  kickGain.gain.setValueAtTime(0.0001, now);
+  kickGain.gain.exponentialRampToValueAtTime(0.075, now + 0.018);
+  kickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+  kickOsc.connect(kickGain); kickGain.connect(actx.destination);
+  kickOsc.start(now);
+  kickOsc.stop(now + 0.24);
 
-  // Gentle low-pass filter to round off the edges
-  const lp = actx.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.frequency.value = 2600;
-  lp.Q.value = 0.5;
-
-  const gain = actx.createGain();
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.085, now + 0.025);   // slow attack
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);   // soft decay
-
-  osc.connect(lp); lp.connect(gain); gain.connect(actx.destination);
-  osc.start(now);
-  osc.stop(now + 0.28);
+  // ----- Water-drop "plink" (the bright top) -----
+  const dropF0 = 1100 + Math.random() * 350;        // ~1100–1450 Hz
+  const dropOsc = actx.createOscillator();
+  dropOsc.type = 'sine';
+  dropOsc.frequency.setValueAtTime(dropF0, now);
+  dropOsc.frequency.exponentialRampToValueAtTime(260, now + 0.07);
+  // Soft low-pass to keep the plink from being shrill
+  const dropLP = actx.createBiquadFilter();
+  dropLP.type = 'lowpass';
+  dropLP.frequency.value = 3200;
+  dropLP.Q.value = 0.6;
+  const dropGain = actx.createGain();
+  dropGain.gain.setValueAtTime(0.0001, now);
+  dropGain.gain.exponentialRampToValueAtTime(0.045, now + 0.010);
+  dropGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+  dropOsc.connect(dropLP); dropLP.connect(dropGain); dropGain.connect(actx.destination);
+  dropOsc.start(now);
+  dropOsc.stop(now + 0.18);
 }
 let _footstepTimer = 0;
 function maybeFootstep(isWalking, dt) {
