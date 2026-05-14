@@ -1236,38 +1236,34 @@ function _getAudioCtx() {
 function playFootstep() {
   const actx = _getAudioCtx();
   if (!actx) return;
-  // Musical kick: low sine body with a fast pitch drop + tiny noise click
-  // for the transient.  Slight random pitch variance per step.
+  // Soft, playful "boop": triangle wave at a major-pentatonic pitch that
+  // gently dips down a third over ~80ms.  Each step picks a different note
+  // so consecutive steps sound like a tiny tune.
   const now = actx.currentTime;
-  const f0  = 140 + Math.random() * 35;    // ~140–175 Hz starting pitch
-  const f1  = 42  + Math.random() * 10;    // ~42–52 Hz bottom
+  const pentatonic = [392.00, 440.00, 493.88, 587.33, 659.25];   // G4 A4 B4 D5 E5
+  const f0 = pentatonic[Math.floor(Math.random() * pentatonic.length)];
+  const f1 = f0 * 0.82;
 
-  // Body
+  // Triangle body — warmer + softer than sine kick
   const osc = actx.createOscillator();
-  osc.type = 'sine';
+  osc.type = 'triangle';
   osc.frequency.setValueAtTime(f0, now);
-  osc.frequency.exponentialRampToValueAtTime(f1, now + 0.10);
+  osc.frequency.exponentialRampToValueAtTime(f1, now + 0.08);
+
+  // Gentle low-pass filter to round off the edges
+  const lp = actx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 2600;
+  lp.Q.value = 0.5;
+
   const gain = actx.createGain();
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.32, now + 0.006);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-  osc.connect(gain); gain.connect(actx.destination);
-  osc.start(now);
-  osc.stop(now + 0.26);
+  gain.gain.exponentialRampToValueAtTime(0.085, now + 0.025);   // slow attack
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);   // soft decay
 
-  // Click — short white-noise burst at the very start, gives the kick punch.
-  const clickLen = Math.max(1, Math.floor(actx.sampleRate * 0.006));
-  const clickBuf = actx.createBuffer(1, clickLen, actx.sampleRate);
-  const cd = clickBuf.getChannelData(0);
-  for (let i = 0; i < clickLen; i++) {
-    cd[i] = (Math.random() * 2 - 1) * (1 - i / clickLen);
-  }
-  const click = actx.createBufferSource();
-  click.buffer = clickBuf;
-  const clickGain = actx.createGain();
-  clickGain.gain.value = 0.10;
-  click.connect(clickGain); clickGain.connect(actx.destination);
-  click.start(now);
+  osc.connect(lp); lp.connect(gain); gain.connect(actx.destination);
+  osc.start(now);
+  osc.stop(now + 0.28);
 }
 let _footstepTimer = 0;
 function maybeFootstep(isWalking, dt) {
