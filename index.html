@@ -3145,15 +3145,28 @@ function buildCaveScene() {
   }
   scene.add(crystalGroup);
 
-  // -- exit sign — sits in the BOTTOM-LEFT corner of the cave (the only way
-  // out, back to the cobble world).  Same mesh used by the art / projects
+  // -- exit sign — sits on the left side of the cave (the only way out,
+  // back to the cobble world).  Same mesh used by the art / projects
   // worlds so it reads as part of the same series.  Positioned just inside
-  // the rock-column ring so it's clearly visible and reachable.
+  // the rock-column ring so it's clearly visible and reachable.  Rotated
+  // 180° from its earlier facing so it now turns TOWARD the viewer.
   const exitSign = buildExitSign('left');
-  exitSign.position.set(-7.2, 0, 7.2);
-  // facing back into the cave so Baymax (approaching from +X-Z) can read it
-  exitSign.rotation.y = (3 * Math.PI) / 4;
+  exitSign.position.set(-7.2, 0, 3.0);
+  exitSign.rotation.y = (3 * Math.PI) / 4 + Math.PI;
   scene.add(exitSign);
+
+  // Warm yellow spotlight just above the sign, throwing a small pool of
+  // light onto the panel — reads like a lantern.
+  const signLight = new THREE.PointLight(0xffd28a, 3.5, 4.5, 1.8);
+  signLight.position.set(-7.2, 3.4, 3.0);
+  scene.add(signLight);
+  // Tiny bulb mesh so the source of the glow is visible
+  const signBulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.06, 12, 10),
+    new THREE.MeshBasicMaterial({ color: 0xffe2a8 })
+  );
+  signBulb.position.copy(signLight.position);
+  scene.add(signBulb);
 
   // -- baymax --
   const baymax = buildBaymax();
@@ -3176,7 +3189,7 @@ function buildCaveScene() {
     mushrooms,
     crystalGroup,
     torchLight: torch,
-    exitSignPos: new THREE.Vector3(-7.2, 0, 7.2),
+    exitSignPos: new THREE.Vector3(-7.2, 0, 3.0),
   };
 }
 
@@ -3969,14 +3982,40 @@ html { scroll-behavior: smooth; }
     keys['escape'] = false;
   }
 
-  // The workbench obstacle blocks Baymax in a band Z ∈ [-4.65, -2.35].  During
-  // computer/book view we lock Baymax inside that band; on exit we must scoot
-  // him to a Z outside the band, otherwise the collision validator refuses
-  // every direction and movement looks "broken".
-  const PROJECTS_SAFE_Z = -2.20;
+  // After exiting a view (computer / book / box) we may have parked Baymax
+  // INSIDE one of the obstacle rectangles (e.g. workbench, or a bigger
+  // crate's hitbox while he was peeking into the smaller one in front of
+  // it).  If so the collision validator refuses every move.  Push him out
+  // along the nearest obstacle edge — and repeat a few times in case
+  // pushing out of one obstacle drops him into a neighbour.
   function unstickProjectsBaymax(b) {
-    if (b.position.z < -2.35) b.position.z = PROJECTS_SAFE_Z;
     if (b.position.y !== 0) b.position.y = 0;
+    const MARGIN = 0.18;
+    if (typeof PROJECTS_OBSTACLES === 'undefined') return;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      let bumped = false;
+      for (const o of PROJECTS_OBSTACLES) {
+        const x = b.position.x, z = b.position.z;
+        if (x > o.minX && x < o.maxX && z > o.minZ && z < o.maxZ) {
+          const dN = z - o.minZ;       // distance to north edge
+          const dS = o.maxZ - z;       // distance to south edge
+          const dW = x - o.minX;       // distance to west edge
+          const dE = o.maxX - x;       // distance to east edge
+          const m = Math.min(dN, dS, dW, dE);
+          if      (m === dN) b.position.z = o.minZ - MARGIN;
+          else if (m === dS) b.position.z = o.maxZ + MARGIN;
+          else if (m === dW) b.position.x = o.minX - MARGIN;
+          else               b.position.x = o.maxX + MARGIN;
+          bumped = true;
+        }
+      }
+      if (!bumped) break;
+    }
+    // Stay inside the scene bounds (defined alongside PROJECTS_OBSTACLES).
+    if (typeof PROJECTS_BOUNDS !== 'undefined') {
+      b.position.x = Math.max(PROJECTS_BOUNDS.minX + 0.1, Math.min(PROJECTS_BOUNDS.maxX - 0.1, b.position.x));
+      b.position.z = Math.max(PROJECTS_BOUNDS.minZ + 0.1, Math.min(PROJECTS_BOUNDS.maxZ - 0.1, b.position.z));
+    }
   }
 
   window.addEventListener('keydown', e => {
@@ -5264,18 +5303,19 @@ html { scroll-behavior: smooth; }
       resetWalk(b);
       resetHead(b);
 
-      // Camera looks DOWN into the crate from above and slightly south of
-      // the open front face.  Look-at is just past the back wall so the
-      // entire interior (floor → back) sits inside the frame.
+      // Side view: camera sits south of the crate at mid-crate height and
+      // looks STRAIGHT north (parallel to the floor) through the open
+      // front face.  Same Y for cam and look-at = no vertical tilt,
+      // giving a clean "platformer cross-section" angle.
       const targetCamPos = new THREE.Vector3(
         crate.data.x,
-        crate.data.s * 1.55,                                   // above the crate
-        crate.data.z + crate.data.s / 2 + crate.data.s * 0.55  // outside the front face
+        crate.data.s * 0.50,
+        crate.data.z + crate.data.s / 2 + crate.data.s * 1.40
       );
       const targetLookAt = new THREE.Vector3(
         crate.data.x,
-        crate.data.s * 0.10,                                   // near the inner floor
-        crate.data.z - crate.data.s * 0.05
+        crate.data.s * 0.50,
+        crate.data.z
       );
       const k = 1 - Math.pow(0.001, dt);
       projectsWorld.camPos.lerp(targetCamPos, k);
@@ -5518,10 +5558,9 @@ html { scroll-behavior: smooth; }
         if (!projectsWorld.eHeld) {
           if (near.type === 'laptop') {
             projectsWorld.computerActive = true;
-            // Also open the real site in a new tab so the user can browse
-            // it without leaving the scene.  Wrapped in try/catch so popup
-            // blockers don't break the rest of the flow.
-            try { window.open('https://www.paattikiiltoon.fi/', '_blank', 'noopener'); } catch (_) {}
+            // Don't auto-open paattikiiltoon.fi — the srcdoc shell already
+            // navigates to it on click, so the user can decide whether to
+            // visit the real site.
           } else if (near.type === 'box') {
             // open this crate's interior
             projectsWorld.boxActive = true;
