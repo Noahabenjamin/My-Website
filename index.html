@@ -1195,6 +1195,46 @@ function applyMovement(baymax, dt, keys, opts) {
 }
 
 // ==========================================================================
+// Cute footstep audio
+// ==========================================================================
+let _sharedAudioCtx = null;
+function _getAudioCtx() {
+  if (_sharedAudioCtx) return _sharedAudioCtx;
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return null;
+  try { _sharedAudioCtx = new Ctor(); } catch (_) { _sharedAudioCtx = null; }
+  return _sharedAudioCtx;
+}
+function playFootstep() {
+  const actx = _getAudioCtx();
+  if (!actx) return;
+  // Short sine "pop" with a faint noise tail — reads as a soft little step.
+  const now = actx.currentTime;
+  const osc = actx.createOscillator();
+  osc.type = 'sine';
+  // small random pitch wobble so consecutive steps don't sound identical
+  const f = 540 + Math.random() * 90;
+  osc.frequency.setValueAtTime(f * 1.35, now);
+  osc.frequency.exponentialRampToValueAtTime(f, now + 0.06);
+  const gain = actx.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.10, now + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+  osc.connect(gain); gain.connect(actx.destination);
+  osc.start(now);
+  osc.stop(now + 0.18);
+}
+let _footstepTimer = 0;
+function maybeFootstep(isWalking, dt) {
+  if (!isWalking) { _footstepTimer = 0; return; }
+  _footstepTimer -= dt;
+  if (_footstepTimer <= 0) {
+    playFootstep();
+    _footstepTimer = 0.34;            // one step every ~0.34 s while walking
+  }
+}
+
+// ==========================================================================
 // Scene 1 — WHITE WORLD
 // ==========================================================================
 
@@ -2764,7 +2804,7 @@ function buildExitSign(arrowDir = 'left') {
   });
 
   // Legs that raise the panel a bit above Baymax's head level
-  const LEG_HEIGHT = 2.0;
+  const LEG_HEIGHT = 1.4;
   for (const x of [-0.45, 0.45]) {
     const leg = new THREE.Mesh(
       new THREE.CylinderGeometry(0.028, 0.028, LEG_HEIGHT, 12),
@@ -3152,7 +3192,9 @@ function buildCaveScene() {
   // 180° from its earlier facing so it now turns TOWARD the viewer.
   const exitSign = buildExitSign('left');
   exitSign.position.set(-7.2, 0, 3.0);
-  exitSign.rotation.y = (3 * Math.PI) / 4 + Math.PI;
+  // Two ×180° turns: the first was added previously, this one cancels +π
+  // back to the original yaw so the face turns toward the viewer.
+  exitSign.rotation.y = (3 * Math.PI) / 4 + Math.PI + Math.PI;
   scene.add(exitSign);
 
   // Warm yellow spotlight just above the sign, throwing a small pool of
@@ -3359,6 +3401,46 @@ function buildProjectsScene() {
   screenMesh.position.set(LAPTOP.x, LAPTOP.y + 0.40, LAPTOP.z - 0.34);
   screenMesh.rotation.x = lidTilt;
   scene.add(screenMesh);
+
+  // ---- "click to open" button on the desk next to the laptop ----
+  // A small physical button the player raycasts and clicks to open the
+  // real paattikiiltoon.fi page in a new tab.  Sits on top of the bench
+  // surface to the right of the laptop.
+  const deskBtnCanvas = document.createElement('canvas');
+  deskBtnCanvas.width = 384; deskBtnCanvas.height = 128;
+  const dbctx = deskBtnCanvas.getContext('2d');
+  // base — warm off-white plate
+  dbctx.fillStyle = '#f4ead2';
+  dbctx.fillRect(0, 0, 384, 128);
+  // dark border
+  dbctx.strokeStyle = '#1f1b14';
+  dbctx.lineWidth = 8;
+  dbctx.strokeRect(4, 4, 376, 120);
+  // label
+  dbctx.fillStyle = '#1f1b14';
+  dbctx.font = 'bold 44px serif';
+  dbctx.textAlign = 'center';
+  dbctx.textBaseline = 'middle';
+  dbctx.fillText('click to open ↗', 192, 64);
+  const deskBtnTex = new THREE.CanvasTexture(deskBtnCanvas);
+  deskBtnTex.colorSpace = THREE.SRGBColorSpace;
+  deskBtnTex.anisotropy = 8;
+  const deskBtnTopMat = new THREE.MeshStandardMaterial({ map: deskBtnTex, roughness: 0.75 });
+  const deskBtnSideMat = new THREE.MeshStandardMaterial({ color: 0x564021, roughness: 0.85 });
+  // BoxGeometry face order: +X, -X, +Y(top), -Y, +Z, -Z
+  const deskBtnMats = [
+    deskBtnSideMat, deskBtnSideMat, deskBtnTopMat,
+    deskBtnSideMat, deskBtnSideMat, deskBtnSideMat,
+  ];
+  const deskBtnMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.36, 0.045, 0.14),
+    deskBtnMats
+  );
+  deskBtnMesh.position.set(0.55, LAPTOP.y + 0.045, LAPTOP.z + 0.10);
+  deskBtnMesh.castShadow = true;
+  deskBtnMesh.receiveShadow = true;
+  deskBtnMesh.userData.isDeskOpenBtn = true;
+  scene.add(deskBtnMesh);
 
   // (the old gray-blue stack of 3 books is replaced by an interactable
   // pair of books built later in this scene)
@@ -3803,6 +3885,7 @@ function buildProjectsScene() {
     laptopScreenTilt: lidTilt,
     laptopScreenMesh: screenMesh,
     laptopBezelMesh: bezel,
+    deskOpenBtnMesh: deskBtnMesh,
     // books + open-book mesh (interactable like the laptop)
     books,
     openBook,
@@ -4058,6 +4141,21 @@ html { scroll-behavior: smooth; }
     const lf = projectsWorld && projectsWorld.laptopIframe;
     if (lf && (e.target === lf || lf.contains?.(e.target))) return;
     try { focusSink?.focus({ preventScroll: true }); } catch (_) {}
+
+    // Desk "click to open" button — clickable while in the projects world
+    // outside any zoomed-in view.  Opens paattikiiltoon.fi in a new tab.
+    if (projectsWorld && stage === 'projects' &&
+        !projectsWorld.computerActive && !projectsWorld.boxActive && !projectsWorld.bookActive &&
+        projectsWorld.deskOpenBtnMesh) {
+      _gameNDC.x = (e.clientX / window.innerWidth)  * 2 - 1;
+      _gameNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      _gameRaycaster.setFromCamera(_gameNDC, projectsWorld.camera);
+      const hits = _gameRaycaster.intersectObject(projectsWorld.deskOpenBtnMesh, false);
+      if (hits.length > 0) {
+        try { window.open('https://www.paattikiiltoon.fi/', '_blank', 'noopener'); } catch (_) {}
+        return;
+      }
+    }
 
     // whack-a-mole hit detection
     if (projectsWorld && projectsWorld.boxActive) {
@@ -4348,6 +4446,7 @@ html { scroll-behavior: smooth; }
         baseY: 0,
         hole: { radius: HOLE_RADIUS, buffer: HOLE_BUFFER, fall: true },
       });
+      maybeFootstep(result === 'walking', dt);
       if (result === 'walking') maybeStartHintFade();
       if (result === 'fell') {
         white.touchedHole = true;
@@ -4893,6 +4992,7 @@ html { scroll-behavior: smooth; }
         baseY: 0,
         validate: (x, z) => checkCobbleExit(x, z).allowed,
       });
+      maybeFootstep(result === 'walking', dt);
       if (result === 'walking') maybeStartHintFade();
 
       // 1 s after the rise completes, fade the four navigation words in.
@@ -4993,6 +5093,7 @@ html { scroll-behavior: smooth; }
       baseY: 0,
       bounds: LINKEDIN_BOUNDS,
     });
+    maybeFootstep(result === 'walking', dt);
     if (result === 'walking') maybeStartHintFade();
 
     // Walk back UP past the top of the screen → return to cobble world,
@@ -5062,6 +5163,7 @@ html { scroll-behavior: smooth; }
       baseY: 0,
       bounds: ART_BOUNDS,
     });
+    maybeFootstep(result === 'walking', dt);
     if (result === 'walking') maybeStartHintFade();
 
     // walk back through the left edge → return to cobble from its right side
@@ -5539,6 +5641,7 @@ html { scroll-behavior: smooth; }
       baseY: 0,
       validate: projectsValidate,
     });
+    maybeFootstep(result === 'walking', dt);
     if (result === 'walking') maybeStartHintFade();
 
     // Return to cobble: triggered by walking off the right edge OR by
@@ -5771,6 +5874,7 @@ html { scroll-behavior: smooth; }
       baseY: 0,
       validate: caveValidate,
     });
+    maybeFootstep(result === 'walking', dt);
     if (result === 'walking') maybeStartHintFade();
 
     // The only way out is to walk up to the exit sign in the top-right.  All
