@@ -2763,8 +2763,8 @@ function buildExitSign(arrowDir = 'left') {
     color: 0x6a6e74, roughness: 0.45, metalness: 0.8,
   });
 
-  // Tall legs that raise the panel above Baymax's head level
-  const LEG_HEIGHT = 3.0;
+  // Legs that raise the panel a bit above Baymax's head level
+  const LEG_HEIGHT = 2.0;
   for (const x of [-0.45, 0.45]) {
     const leg = new THREE.Mesh(
       new THREE.CylinderGeometry(0.028, 0.028, LEG_HEIGHT, 12),
@@ -2952,7 +2952,7 @@ function buildArtScene() {
 
   // exit sign — points back to the LEFT (where the entry/exit edge is)
   const exitSign = buildExitSign('left');
-  exitSign.position.set(-8.0, 0, -0.4);
+  exitSign.position.set(-8.0, 0, -2.0);     // shifted north
   scene.add(exitSign);
 
   // SAME top-down camera as cobble
@@ -3707,19 +3707,38 @@ function buildProjectsScene() {
   );
   spine.position.set(0, 0.004, 0);
   openBook.add(spine);
-  // a flipping page (initially hidden) — used for the page-turn animation
-  const flipMat = leftMat.clone();
-  const flipPage = new THREE.Mesh(new THREE.PlaneGeometry(pageW, pageH), flipMat);
-  flipPage.rotation.x = -Math.PI / 2;
-  flipPage.position.set(0, 0.005, 0);
-  flipPage.visible = false;
-  openBook.add(flipPage);
+  // ---- Page-flip rig ----
+  // flipPivot sits on the spine.  The flipMesh inside it has its geometry
+  // pre-translated so the page's LEFT edge is at the pivot's origin — this
+  // means rotating the pivot around its Z axis swings the page around the
+  // spine like a real book page.  Used both for forward (right→left) and
+  // backward (left→right) flips; we just preset the pivot's rotation to π
+  // at the start of a backward flip so it begins on the left.
+  const flipCanvas = document.createElement('canvas');
+  flipCanvas.width = 384; flipCanvas.height = 512;
+  const flipTex = new THREE.CanvasTexture(flipCanvas);
+  flipTex.colorSpace = THREE.SRGBColorSpace;
+  const flipMat = new THREE.MeshStandardMaterial({
+    map: flipTex, roughness: 0.85, side: THREE.DoubleSide,
+  });
+  const flipGeom = new THREE.PlaneGeometry(pageW, pageH);
+  flipGeom.translate(pageW / 2, 0, 0);          // shift so left edge at x=0
+  const flipMesh = new THREE.Mesh(flipGeom, flipMat);
+  flipMesh.rotation.x = -Math.PI / 2;
+  const flipPivot = new THREE.Group();
+  flipPivot.position.set(0, 0.005, 0);
+  flipPivot.add(flipMesh);
+  flipPivot.visible = false;
+  openBook.add(flipPivot);
+  // Compatibility: keep the old `flipPage` reference pointed at the pivot
+  // so the open-/close-book reset code that toggles it still works.
+  const flipPage = flipPivot;
   openBook.visible = false;
   scene.add(openBook);
 
   // exit sign — points back to the RIGHT (the entry/exit edge for projects)
   const exitSign = buildExitSign('right');
-  exitSign.position.set(8.0, 0, -0.4);
+  exitSign.position.set(8.0, 0, -2.0);      // shifted north
   scene.add(exitSign);
 
   // a clip-on warm desk lamp at the right end of the bench
@@ -3773,11 +3792,17 @@ function buildProjectsScene() {
     leftPage,
     rightPage,
     flipPage,
+    flipPivot,
+    flipMesh,
+    flipCanvas,
+    flipTex,
     leftCanvas,
     rightCanvas,
     leftTex,
     rightTex,
     flipMat,
+    pageW,
+    pageH,
     // crates with peep-inside interaction
     crates,
   };
@@ -4204,37 +4229,39 @@ html { scroll-behavior: smooth; }
       hideGameScoreUI();
     }
 
+    // Nav-word visibility: only cobble (after wordsShown) shows them.
+    // Every other stage instant-hides them.
+    {
+      const w = document.getElementById('words');
+      if (w) {
+        if (name === 'cobble' && cobblestone.wordsShown) {
+          w.classList.remove('instant-off');
+          w.classList.add('visible');
+        } else {
+          w.classList.add('instant-off');
+          w.classList.remove('visible');
+        }
+      }
+    }
+
     if (name === 'psych') {
       fade.style.opacity = '0';
       flashCut();
     } else if (name === 'cobble') {
       vignette.style.opacity = '0';
       fade.style.opacity = '0';
-      // when returning from any portal world the four nav words should fade
-      // back in over 2.5 s — drop instant-off and re-add visible
-      const w = document.getElementById('words');
-      if (w && cobblestone.wordsShown) {
-        w.classList.remove('instant-off');
-        w.classList.add('visible');
-      }
+      flashCut();
+    } else if (name === 'beach' || name === 'linkedin' ||
+               name === 'art'   || name === 'projects' ||
+               name === 'cave') {
+      vignette.style.opacity = '0';
+      fade.style.opacity = '0';
       flashCut();
     }
 
     // Show / hide the psych "skip →" pill based on the current stage.
     const psychSkipEl = document.getElementById('psych-skip');
-    if (psychSkipEl) psychSkipEl.style.display = (name === 'psych') ? 'block' : 'none'; else if (name === 'beach' || name === 'linkedin' ||
-               name === 'art'   || name === 'projects' ||
-               name === 'cave') {
-      // INSTANT hide of the four nav words (no fade) on portal entry
-      const w = document.getElementById('words');
-      if (w) {
-        w.classList.add('instant-off');
-        w.classList.remove('visible');
-      }
-      vignette.style.opacity = '0';
-      fade.style.opacity = '0';
-      flashCut();
-    }
+    if (psychSkipEl) psychSkipEl.style.display = (name === 'psych') ? 'block' : 'none';
   }
 
   // ---- vignette (intro) ----
@@ -5080,6 +5107,84 @@ html { scroll-behavior: smooth; }
     projectsWorld.rightTex.needsUpdate = true;
   }
 
+  // ---- 1.5-second page-flip animation ----
+  // Captures the page being turned onto a separate flip canvas, swings the
+  // flipPivot around the spine, and swaps in the destination page mid-flip.
+  function startBookFlip(direction) {
+    const book = projectsWorld.activeBook;
+    if (!book || !book.data || !book.data.pages) return;
+    const pages = book.data.pages;
+    const oldIdx = projectsWorld.bookPage;
+    const newIdx = THREE.MathUtils.clamp(
+      oldIdx + (direction > 0 ? 1 : -1), 0, pages.length - 1
+    );
+    if (newIdx === oldIdx) return;
+    const oldData = pages[oldIdx];
+    const newData = pages[newIdx];
+
+    // Draw the OLD page content (the side that's flipping over) onto the
+    // flipCanvas — this is what the player sees on the flipping page during
+    // the first half of the animation.
+    drawBookPage(
+      projectsWorld.flipCanvas,
+      direction > 0 ? oldData.r : oldData.l,
+      direction > 0 ? false : true
+    );
+    projectsWorld.flipTex.needsUpdate = true;
+
+    // Update the underlying pages to the NEW content — they're covered by
+    // the flipping page until mid-rotation, then progressively revealed.
+    drawBookPage(projectsWorld.leftCanvas,  newData.l, true);
+    drawBookPage(projectsWorld.rightCanvas, newData.r, false);
+    projectsWorld.leftTex.needsUpdate  = true;
+    projectsWorld.rightTex.needsUpdate = true;
+
+    projectsWorld.bookPage = newIdx;
+
+    // Set up the flip pivot for the chosen direction.  For forward (right →
+    // left) the page swings counter-clockwise; for backward the pivot starts
+    // pre-rotated to π so it begins on the left and swings to 0.
+    projectsWorld.flipPivot.rotation.z = direction > 0 ? 0 : Math.PI;
+    projectsWorld.flipPivot.visible = true;
+    projectsWorld.flipState = {
+      direction,
+      elapsed: 0,
+      duration: 1.5,
+      midSwapped: false,
+      newData,
+    };
+  }
+
+  function updateBookFlip(dt) {
+    const s = projectsWorld.flipState;
+    if (!s) return;
+    s.elapsed += dt;
+    const u = Math.min(1, s.elapsed / s.duration);
+    const eased = u * u * (3 - 2 * u);
+    // direction +1: rotate 0 → π.  direction -1: rotate π → 0.
+    projectsWorld.flipPivot.rotation.z = s.direction > 0
+      ? eased * Math.PI
+      : (1 - eased) * Math.PI;
+
+    // Mid-flip: swap the flipMesh texture to the DESTINATION side so the
+    // second half of the rotation appears to lay the new page down.
+    if (!s.midSwapped && u >= 0.5) {
+      s.midSwapped = true;
+      drawBookPage(
+        projectsWorld.flipCanvas,
+        s.direction > 0 ? s.newData.l : s.newData.r,
+        s.direction > 0 ? true : false
+      );
+      projectsWorld.flipTex.needsUpdate = true;
+    }
+
+    if (u >= 1) {
+      projectsWorld.flipPivot.visible = false;
+      projectsWorld.flipPivot.rotation.z = 0;
+      projectsWorld.flipState = null;
+    }
+  }
+
   function updateProjects(dt) {
     const b = projectsWorld.baymax;
 
@@ -5110,17 +5215,18 @@ html { scroll-behavior: smooth; }
       // page flipping (rate-limited so a held key doesn't tear through pages)
       projectsWorld.bookFlipCooldown = Math.max(0, (projectsWorld.bookFlipCooldown || 0) - dt);
       const pages = book.data.pages;
-      if (projectsWorld.bookFlipCooldown <= 0) {
+      // run the flip animation (no-op when none in progress)
+      updateBookFlip(dt);
+      // accept new flip input only when no flip is currently animating
+      if (projectsWorld.bookFlipCooldown <= 0 && !projectsWorld.flipState) {
         const goRight = keys['d'] || keys['arrowright'];
         const goLeft  = keys['a'] || keys['arrowleft'];
         if (goRight && projectsWorld.bookPage < pages.length - 1) {
-          projectsWorld.bookPage++;
-          projectsWorld.bookFlipCooldown = 0.42;
-          updateBookPages();
+          projectsWorld.bookFlipCooldown = 1.6;       // match the 1.5 s flip
+          startBookFlip(+1);
         } else if (goLeft && projectsWorld.bookPage > 0) {
-          projectsWorld.bookPage--;
-          projectsWorld.bookFlipCooldown = 0.42;
-          updateBookPages();
+          projectsWorld.bookFlipCooldown = 1.6;
+          startBookFlip(-1);
         }
       }
 
@@ -5440,6 +5546,11 @@ html { scroll-behavior: smooth; }
             projectsWorld.activeBook = near.book;
             projectsWorld.bookPage = 0;
             projectsWorld.bookFlipCooldown = 0;
+            projectsWorld.flipState = null;
+            if (projectsWorld.flipPivot) {
+              projectsWorld.flipPivot.visible = false;
+              projectsWorld.flipPivot.rotation.z = 0;
+            }
             if (near.book.meshes) for (const m of near.book.meshes) m.visible = false;
             projectsWorld.openBook.position.set(
               near.book.data.x,
