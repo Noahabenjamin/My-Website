@@ -118,6 +118,49 @@
   }
   #sound-toggle:hover { background: rgba(0,0,0,0.62); }
   #sound-toggle.muted { text-decoration: line-through; opacity: 0.55; }
+  /* "Under construction" X overlay — only shown while in the art world */
+  #under-construction {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 28;
+    display: none;
+    overflow: hidden;
+  }
+  #under-construction.visible { display: block; }
+  .uc-bar {
+    position: absolute;
+    top: 50%;
+    left: -25%;
+    width: 150%;
+    height: 96px;
+    transform-origin: 50% 50%;
+    background: repeating-linear-gradient(
+      135deg,
+      #f1c40f 0 26px,
+      #1a1a1a 26px 52px
+    );
+    border-top: 4px solid #1a1a1a;
+    border-bottom: 4px solid #1a1a1a;
+    box-shadow: 0 0 22px rgba(0,0,0,0.55);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+  }
+  .uc-bar span {
+    color: #ffffff;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 900;
+    font-size: 38px;
+    letter-spacing: 0.18em;
+    text-shadow:
+      -2px -2px 0 #000, 2px -2px 0 #000,
+      -2px  2px 0 #000, 2px  2px 0 #000;
+    white-space: nowrap;
+    width: 100%;
+    text-align: center;
+  }
+  .uc-bar-1 { transform: translateY(-50%) rotate(-32deg); }
+  .uc-bar-2 { transform: translateY(-50%) rotate( 32deg); }
   /* "click e" HTML overlay for the projects world (positioned in JS) */
   #projects-prompt {
     position: fixed;
@@ -270,6 +313,11 @@
 <button id="laptop-open-site" type="button">click to open</button>
 <!-- Tiny global sound-on/off toggle, top-right of the screen -->
 <button id="sound-toggle" type="button" aria-label="toggle sound">sound</button>
+<!-- "Under construction" diagonal X overlay — shown only while in the art world -->
+<div id="under-construction" aria-hidden="true">
+  <div class="uc-bar uc-bar-1"><span>UNDER CONSTRUCTION · UNDER CONSTRUCTION · UNDER CONSTRUCTION ·</span></div>
+  <div class="uc-bar uc-bar-2"><span>UNDER CONSTRUCTION · UNDER CONSTRUCTION · UNDER CONSTRUCTION ·</span></div>
+</div>
 <div id="fade"></div>
 <div id="words" aria-hidden="true">
   <div class="word top">relax</div>
@@ -1309,7 +1357,11 @@ function playFootstep() {
   dropOsc.stop(now + 0.18);
 }
 let _footstepTimer = 0;
+// Footsteps are currently DISABLED.  The synthesis above is left intact —
+// flip this flag to true to bring the kick + water-drop step sound back.
+const FOOTSTEPS_ENABLED = false;
 function maybeFootstep(isWalking, dt) {
+  if (!FOOTSTEPS_ENABLED) return;
   if (!isWalking) { _footstepTimer = 0; return; }
   _footstepTimer -= dt;
   if (_footstepTimer <= 0) {
@@ -2983,6 +3035,88 @@ function buildExitSign(arrowDir = 'left') {
   return g;
 }
 
+function buildSawhorseBarricade() {
+  // Wooden sawhorse with yellow + black caution tape strung across the top.
+  // Decorative — no collision.  Returned as a Group centred at floor.
+  const g = new THREE.Group();
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x8a5a2a, roughness: 0.85 });
+  const TOP_W = 1.4;
+  const TOP_H = 0.85;
+  // Top horizontal beam
+  const top = new THREE.Mesh(
+    new THREE.BoxGeometry(TOP_W, 0.06, 0.06),
+    woodMat
+  );
+  top.position.y = TOP_H;
+  top.castShadow = true;
+  top.receiveShadow = true;
+  g.add(top);
+  // Two pairs of angled legs (one pair each end)
+  for (const xEnd of [-TOP_W * 0.45, TOP_W * 0.45]) {
+    for (const lz of [-0.20, 0.20]) {
+      const leg = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.025, TOP_H + 0.05, 10),
+        woodMat
+      );
+      leg.position.set(xEnd, (TOP_H + 0.05) / 2, lz);
+      // splay outward
+      leg.rotation.x = Math.atan2(lz, TOP_H) * 0.55;
+      leg.rotation.z = Math.atan2(xEnd > 0 ? -1 : 1, TOP_H) * 0.10;
+      leg.castShadow = true;
+      g.add(leg);
+    }
+  }
+
+  // Yellow + black caution-tape canvas
+  const cw = 512, ch = 64;
+  const cv = document.createElement('canvas');
+  cv.width = cw; cv.height = ch;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#f1c40f'; c.fillRect(0, 0, cw, ch);
+  // diagonal black stripes
+  c.fillStyle = '#1a1a1a';
+  const stripeW = 36, stripePitch = 56;
+  c.save();
+  for (let x = -ch; x < cw + ch; x += stripePitch) {
+    c.beginPath();
+    c.moveTo(x, 0);
+    c.lineTo(x + stripeW, 0);
+    c.lineTo(x + stripeW + ch, ch);
+    c.lineTo(x + ch, ch);
+    c.closePath();
+    c.fill();
+  }
+  c.restore();
+  // CAUTION text along the centre
+  c.fillStyle = '#1a1a1a';
+  c.font = 'bold 24px sans-serif';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  // Render text overlapping the stripes with a small white outline
+  c.strokeStyle = '#f1c40f';
+  c.lineWidth = 4;
+  for (let x = 80; x < cw; x += 200) {
+    c.strokeText('CAUTION', x, ch / 2);
+    c.fillText('CAUTION', x, ch / 2);
+  }
+  const tapeTex = new THREE.CanvasTexture(cv);
+  tapeTex.colorSpace = THREE.SRGBColorSpace;
+  tapeTex.wrapS = THREE.RepeatWrapping;
+  tapeTex.repeat.x = 2;
+  const tapeMat = new THREE.MeshStandardMaterial({
+    map: tapeTex, roughness: 0.85, side: THREE.DoubleSide,
+  });
+  const tape = new THREE.Mesh(
+    new THREE.PlaneGeometry(TOP_W * 1.05, 0.10),
+    tapeMat
+  );
+  tape.position.set(0, TOP_H + 0.20, 0);
+  tape.rotation.x = -0.04;
+  g.add(tape);
+
+  return g;
+}
+
 function buildArtScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xeee5d3);    // warm gallery off-white
@@ -3078,6 +3212,25 @@ function buildArtScene() {
   const exitSign = buildExitSign('left');
   exitSign.position.set(-8.0, 0, -2.0);     // shifted north
   scene.add(exitSign);
+
+  // ---- "under construction" caution sawhorses ----
+  // Three barricades: one across Baymax's entry path, one mid-room, one
+  // tight against the back wall in front of the paintings.
+  const barricadeEntry = buildSawhorseBarricade();
+  barricadeEntry.position.set(-9.5, 0, 0);
+  barricadeEntry.rotation.y = Math.PI / 2;     // turned to block the entry walkway
+  scene.add(barricadeEntry);
+
+  const barricadeMid = buildSawhorseBarricade();
+  barricadeMid.position.set(-1.5, 0, -1.5);
+  scene.add(barricadeMid);
+
+  const barricadeBack = buildSawhorseBarricade();
+  barricadeBack.position.set(-3.0, 0, -5.0);
+  scene.add(barricadeBack);
+  const barricadeBack2 = buildSawhorseBarricade();
+  barricadeBack2.position.set(2.5, 0, -5.0);
+  scene.add(barricadeBack2);
 
   // SAME top-down camera as cobble
   const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 200);
@@ -4465,6 +4618,10 @@ html { scroll-behavior: smooth; }
     // Show / hide the psych "skip →" pill based on the current stage.
     const psychSkipEl = document.getElementById('psych-skip');
     if (psychSkipEl) psychSkipEl.style.display = (name === 'psych') ? 'block' : 'none';
+
+    // Show / hide the "under construction" X overlay (art world only).
+    const ucEl = document.getElementById('under-construction');
+    if (ucEl) ucEl.classList.toggle('visible', name === 'art');
   }
 
   // ---- vignette (intro) ----
