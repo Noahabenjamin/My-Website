@@ -97,6 +97,27 @@
     transition: background 0.2s;
   }
   #laptop-open-site:hover { background: rgba(255,255,255,0.14); }
+  /* Tiny "sound" toggle in the top-right of the screen, always visible. */
+  #sound-toggle {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 40;
+    padding: 3px 9px;
+    background: rgba(0,0,0,0.42);
+    color: #f5efe2;
+    border: 1px solid rgba(245,239,226,0.30);
+    border-radius: 999px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.2s, background 0.2s;
+  }
+  #sound-toggle:hover { background: rgba(0,0,0,0.62); }
+  #sound-toggle.muted { text-decoration: line-through; opacity: 0.55; }
   /* "click e" HTML overlay for the projects world (positioned in JS) */
   #projects-prompt {
     position: fixed;
@@ -247,6 +268,8 @@
 <button id="laptop-close" type="button" aria-label="close">×</button>
 <!-- Visible only while computer-view is open: opens paattikiiltoon.fi in a new tab. -->
 <button id="laptop-open-site" type="button">click to open</button>
+<!-- Tiny global sound-on/off toggle, top-right of the screen -->
+<button id="sound-toggle" type="button" aria-label="toggle sound">sound</button>
 <div id="fade"></div>
 <div id="words" aria-hidden="true">
   <div class="word top">relax</div>
@@ -537,6 +560,7 @@ function initIntroSequence() {
   // random noise with crinkle-spike envelopes.  Played when the 3D scrunch
   // starts so the visual + audio land together.
   function playCrumpleSound() {
+    if (!_soundOn) return;
     try {
       const Ctor = window.AudioContext || window.webkitAudioContext;
       if (!Ctor) return;
@@ -1226,6 +1250,8 @@ function applyMovement(baymax, dt, keys, opts) {
 // Cute footstep audio
 // ==========================================================================
 let _sharedAudioCtx = null;
+let _soundOn = true;
+try { _soundOn = localStorage.getItem('noah_sound_off') !== '1'; } catch (_) {}
 function _getAudioCtx() {
   if (_sharedAudioCtx) return _sharedAudioCtx;
   const Ctor = window.AudioContext || window.webkitAudioContext;
@@ -1233,7 +1259,15 @@ function _getAudioCtx() {
   try { _sharedAudioCtx = new Ctor(); } catch (_) { _sharedAudioCtx = null; }
   return _sharedAudioCtx;
 }
+function setSoundOn(on) {
+  _soundOn = !!on;
+  try { localStorage.setItem('noah_sound_off', _soundOn ? '0' : '1'); } catch (_) {}
+  // mute the intro video too when sound is off
+  const v = document.getElementById('intro-video');
+  if (v) v.muted = !_soundOn;
+}
 function playFootstep() {
+  if (!_soundOn) return;
   const actx = _getAudioCtx();
   if (!actx) return;
   // Soft mix of a kick body + water-drop plink, layered for a cute step
@@ -1249,7 +1283,7 @@ function playFootstep() {
   kickOsc.frequency.exponentialRampToValueAtTime(46, now + 0.10);
   const kickGain = actx.createGain();
   kickGain.gain.setValueAtTime(0.0001, now);
-  kickGain.gain.exponentialRampToValueAtTime(0.075, now + 0.018);
+  kickGain.gain.exponentialRampToValueAtTime(0.030, now + 0.018);
   kickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
   kickOsc.connect(kickGain); kickGain.connect(actx.destination);
   kickOsc.start(now);
@@ -1268,7 +1302,7 @@ function playFootstep() {
   dropLP.Q.value = 0.6;
   const dropGain = actx.createGain();
   dropGain.gain.setValueAtTime(0.0001, now);
-  dropGain.gain.exponentialRampToValueAtTime(0.045, now + 0.010);
+  dropGain.gain.exponentialRampToValueAtTime(0.018, now + 0.010);
   dropGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
   dropOsc.connect(dropLP); dropLP.connect(dropGain); dropGain.connect(actx.destination);
   dropOsc.start(now);
@@ -4059,6 +4093,28 @@ html { scroll-behavior: smooth; }
   if (laptopOpenSiteBtn) {
     laptopOpenSiteBtn.addEventListener('click', () => {
       try { window.open('https://www.paattikiiltoon.fi/', '_blank', 'noopener'); } catch (_) {}
+    });
+  }
+
+  // Global sound on/off toggle (top-right pill).  Persists in localStorage.
+  const soundToggleBtn = document.getElementById('sound-toggle');
+  function refreshSoundBtn() {
+    if (!soundToggleBtn) return;
+    if (_soundOn) {
+      soundToggleBtn.classList.remove('muted');
+      soundToggleBtn.title = 'sound on (click to mute)';
+    } else {
+      soundToggleBtn.classList.add('muted');
+      soundToggleBtn.title = 'sound off (click to unmute)';
+    }
+  }
+  refreshSoundBtn();
+  // Apply the persisted "muted" state to the intro video too.
+  setSoundOn(_soundOn);
+  if (soundToggleBtn) {
+    soundToggleBtn.addEventListener('click', () => {
+      setSoundOn(!_soundOn);
+      refreshSoundBtn();
     });
   }
 
