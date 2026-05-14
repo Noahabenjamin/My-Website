@@ -3466,6 +3466,7 @@ function buildProjectsScene() {
     let cinemaMat = null;
     let cinemaCanvas = null;
     let cinemaCtx = null;
+    let tireMesh = null;
     const gameTargets = [];
 
     if (idx === 0) {
@@ -3478,13 +3479,13 @@ function buildProjectsScene() {
       );
       rope.position.y = -d.s * 0.20;
       tirePivot.add(rope);
-      const tire = new THREE.Mesh(
+      tireMesh = new THREE.Mesh(
         new THREE.TorusGeometry(d.s * 0.10, d.s * 0.028, 10, 18),
         new THREE.MeshStandardMaterial({ color: 0x0e0e0e, roughness: 0.95 })
       );
-      tire.position.y = -d.s * 0.40 + d.s * 0.05;
-      tire.rotation.x = Math.PI / 2;
-      tirePivot.add(tire);
+      tireMesh.position.y = -d.s * 0.40 + d.s * 0.05;
+      tireMesh.rotation.x = Math.PI / 2;
+      tirePivot.add(tireMesh);
       interior.add(tirePivot);
     } else if (idx === 1) {
       // 2. Tiny garden — flower + bench + grass tufts
@@ -3539,26 +3540,27 @@ function buildProjectsScene() {
         interior.add(tuft);
       }
     } else if (idx === 2) {
-      // 3. Mini cinema — small screen on the back wall with a looping animation
+      // 3. Mini cinema — narrow VERTICAL window mounted on the RIGHT side
+      // of the back wall so it doesn't overlap the "3 / mini cinema" poster.
       cinemaCanvas = document.createElement('canvas');
-      cinemaCanvas.width = 256; cinemaCanvas.height = 144;
+      cinemaCanvas.width = 144; cinemaCanvas.height = 256;     // vertical aspect
       cinemaCtx = cinemaCanvas.getContext('2d');
       const cinemaTex = new THREE.CanvasTexture(cinemaCanvas);
       cinemaTex.colorSpace = THREE.SRGBColorSpace;
       cinemaMat = new THREE.MeshBasicMaterial({ map: cinemaTex });
       const cinemaScreen = new THREE.Mesh(
-        new THREE.PlaneGeometry(d.s * 0.62, d.s * 0.35),
+        new THREE.PlaneGeometry(d.s * 0.26, d.s * 0.55),
         cinemaMat
       );
-      cinemaScreen.position.set(0, d.s * 0.12, -d.s / 2 + 0.011);
+      cinemaScreen.position.set(d.s * 0.24, d.s * 0.18, -d.s / 2 + 0.011);
       interior.add(cinemaScreen);
       // simple frame around the screen
       const frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1208, roughness: 0.9 });
       const frame = new THREE.Mesh(
-        new THREE.PlaneGeometry(d.s * 0.68, d.s * 0.41),
+        new THREE.PlaneGeometry(d.s * 0.32, d.s * 0.61),
         frameMat
       );
-      frame.position.set(0, d.s * 0.12, -d.s / 2 + 0.010);
+      frame.position.set(d.s * 0.24, d.s * 0.18, -d.s / 2 + 0.010);
       interior.add(frame);
       // tiny seats in front of the screen
       const seatMat = new THREE.MeshStandardMaterial({ color: 0x4a1e1e, roughness: 0.85 });
@@ -3607,6 +3609,7 @@ function buildProjectsScene() {
       interior,
       mini,
       tirePivot,
+      tireMesh,
       cinemaCanvas,
       cinemaCtx,
       cinemaMat,
@@ -3620,6 +3623,7 @@ function buildProjectsScene() {
       miniFacing: 1,
       tireT: 0,
       cinemaT: 0,
+      ridingTire: false,
       idx,
     });
   }
@@ -5323,19 +5327,31 @@ html { scroll-behavior: smooth; }
       projectsWorld.camera.position.copy(projectsWorld.camPos);
       projectsWorld.camera.lookAt(projectsWorld.camLook);
 
+      // proximity to the tire (crate 1 only) — controls the E-mount hint
+      const tireX = crate.data.s * 0.22;
+      const nearTire = !!crate.tireMesh && Math.abs(crate.miniX - tireX) < crate.data.s * 0.20;
+
       // controls hint while inside the crate
-      projectsPromptEl.textContent = '← → to move   |   e to close';
+      if (crate.ridingTire) {
+        projectsPromptEl.textContent = 'e to hop off';
+      } else if (nearTire) {
+        projectsPromptEl.textContent = '← → to move   |   e to ride the swing';
+      } else {
+        projectsPromptEl.textContent = '← → to move   |   e to close';
+      }
       const above = new THREE.Vector3(crate.data.x, crate.data.s + 0.45, crate.data.z + 0.1);
       const ndcP = above.project(projectsWorld.camera);
       projectsPromptEl.style.left = `${(ndcP.x * 0.5 + 0.5) * window.innerWidth}px`;
       projectsPromptEl.style.top  = `${(-ndcP.y * 0.5 + 0.5) * window.innerHeight}px`;
       projectsPromptEl.style.display = 'block';
 
-      // 2D-platformer movement: only left/right
+      // 2D-platformer movement: only left/right (locked while riding the tire)
       const halfRange = crate.data.s / 2 - 0.10;
       let mdx = 0;
-      if (keys['a'] || keys['arrowleft'])  mdx -= 1;
-      if (keys['d'] || keys['arrowright']) mdx += 1;
+      if (!crate.ridingTire) {
+        if (keys['a'] || keys['arrowleft'])  mdx -= 1;
+        if (keys['d'] || keys['arrowright']) mdx += 1;
+      }
       if (mdx !== 0) {
         const miniSpeed = crate.data.s * 0.55;
         crate.miniX = THREE.MathUtils.clamp(
@@ -5345,17 +5361,31 @@ html { scroll-behavior: smooth; }
         crate.miniWalkPhase += dt * 14;
         animateWalk(crate.mini, crate.miniWalkPhase, 1.0);
         crate.mini.position.y = crate.miniBaseY + Math.abs(Math.sin(crate.miniWalkPhase)) * 0.03;
-      } else {
+      } else if (!crate.ridingTire) {
         resetWalk(crate.mini);
         crate.mini.position.y = crate.miniBaseY;
       }
-      crate.mini.position.x = crate.miniX;
-      crate.mini.rotation.y = crate.miniFacing > 0 ? Math.PI / 2 : -Math.PI / 2;
+      if (!crate.ridingTire) {
+        crate.mini.position.x = crate.miniX;
+        crate.mini.rotation.y = crate.miniFacing > 0 ? Math.PI / 2 : -Math.PI / 2;
+      }
 
       // swing the tire (only crates that have one)
       if (crate.tirePivot) {
         crate.tireT = (crate.tireT || 0) + dt;
         crate.tirePivot.rotation.x = Math.sin(crate.tireT * 1.6) * 0.45;
+      }
+
+      // If Baymax is riding the swing, snap his position to the tire each
+      // frame so he swings with it.
+      if (crate.ridingTire && crate.tireMesh) {
+        crate.tireMesh.updateMatrixWorld(true);
+        const tireWorld = new THREE.Vector3().setFromMatrixPosition(crate.tireMesh.matrixWorld);
+        crate.interior.worldToLocal(tireWorld);
+        crate.mini.position.copy(tireWorld);
+        crate.mini.position.y -= 0.02;
+        resetWalk(crate.mini);
+        crate.mini.rotation.y = 0;       // face the camera while swinging
       }
       // animate the mini-cinema canvas (only the cinema crate)
       if (crate.cinemaCtx) {
@@ -5388,22 +5418,46 @@ html { scroll-behavior: smooth; }
         }
       }
 
-      // E or ESC to close
-      if (keys['e'] || keys['escape']) {
+      // E / ESC handling.  Inside the tire-swing crate, E first toggles
+      // mounting/dismounting the swing; only if Baymax is NOT near the
+      // tire (and not already riding) does E exit the box view.  ESC
+      // always exits regardless.
+      const escPressed = !!keys['escape'];
+      const ePressed   = !!keys['e'];
+      if (ePressed || escPressed) {
         if (!projectsWorld.eHeld) {
-          projectsWorld.boxActive = false;
-          // restore the front face material
-          if (crate.frontMat) crate.crateMesh.material[4] = crate.frontMat;
-          crate.interior.visible = false;
-          b.visible = true;                       // re-show outer Baymax
-          projectsPromptEl.textContent = 'click e';
-          // hide whack-a-mole score / clear active target
-          if (crate.gameTargets) {
-            for (const t of crate.gameTargets) t.visible = false;
+          let consumed = false;
+          if (ePressed && !escPressed && crate.tireMesh) {
+            if (crate.ridingTire) {
+              // dismount
+              crate.ridingTire = false;
+              crate.mini.position.x = crate.miniX;
+              crate.mini.position.y = crate.miniBaseY;
+              crate.mini.position.z = crate.data.s * 0.10;
+              consumed = true;
+            } else if (nearTire) {
+              // mount
+              crate.ridingTire = true;
+              consumed = true;
+            }
           }
-          hideGameScoreUI();
-          unstickProjectsBaymax(b);
-          restoreParentFocus();
+          if (!consumed) {
+            projectsWorld.boxActive = false;
+            // restore the front face material
+            if (crate.frontMat) crate.crateMesh.material[4] = crate.frontMat;
+            crate.interior.visible = false;
+            b.visible = true;                       // re-show outer Baymax
+            projectsPromptEl.textContent = 'click e';
+            // hide whack-a-mole score / clear active target
+            if (crate.gameTargets) {
+              for (const t of crate.gameTargets) t.visible = false;
+            }
+            // dismount tire on exit so a future visit starts on the floor
+            crate.ridingTire = false;
+            hideGameScoreUI();
+            unstickProjectsBaymax(b);
+            restoreParentFocus();
+          }
         }
         projectsWorld.eHeld = true;
       } else {
@@ -5487,9 +5541,13 @@ html { scroll-behavior: smooth; }
     });
     if (result === 'walking') maybeStartHintFade();
 
-    // walk back through the right edge → return to cobble
-    if (b.position.x >= PROJECTS_BOUNDS.maxX - 0.05 && !projectsWorld.returning) {
+    // Return to cobble: triggered by walking off the right edge OR by
+    // pressing ESC while in the world (mirrors the beach's ESC exit).
+    const wantsExitByEdge = b.position.x >= PROJECTS_BOUNDS.maxX - 0.05;
+    const wantsExitByEsc  = !!keys['escape'];
+    if ((wantsExitByEdge || wantsExitByEsc) && !projectsWorld.returning) {
       projectsWorld.returning = true;
+      keys['escape'] = false;
       cobblestone.exited    = false;
       cobblestone.landed    = true;
       cobblestone.landT     = COBBLE_FALL_OVER + COBBLE_LIE + COBBLE_RISE + 1.0;
