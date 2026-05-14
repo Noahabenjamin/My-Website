@@ -4852,10 +4852,15 @@ html { scroll-behavior: smooth; }
       });
       if (result === 'walking') maybeStartHintFade();
 
-      // 1 s after the rise completes, fade the four navigation words in
+      // 1 s after the rise completes, fade the four navigation words in.
+      // Drop `instant-off` first so the CSS !important hide doesn't override.
       const tAfter = lt - (COBBLE_FALL_OVER + COBBLE_LIE + COBBLE_RISE);
       if (tAfter >= 1.0 && !cobblestone.wordsShown) {
-        document.getElementById('words').classList.add('visible');
+        const w = document.getElementById('words');
+        if (w) {
+          w.classList.remove('instant-off');
+          w.classList.add('visible');
+        }
         cobblestone.wordsShown = true;
       }
 
