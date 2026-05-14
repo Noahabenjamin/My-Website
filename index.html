@@ -71,6 +71,32 @@
     user-select: none;
   }
   #laptop-close:hover { background: rgba(0,0,0,0.75); }
+  /* "click to open" pill — same look as the intro tap-to-begin button.
+     Shown only while computerActive (toggled in JS). */
+  #laptop-open-site {
+    position: fixed;
+    top: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 36;
+    padding: 14px 30px;
+    background: rgba(255,255,255,0.07);
+    color: #f5efe2;
+    border: 1px solid rgba(245,239,226,0.5);
+    border-radius: 999px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 24px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    user-select: none;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: none;
+    transition: background 0.2s;
+  }
+  #laptop-open-site:hover { background: rgba(255,255,255,0.14); }
   /* "click e" HTML overlay for the projects world (positioned in JS) */
   #projects-prompt {
     position: fixed;
@@ -219,6 +245,8 @@
 <div id="beach-back" aria-label="back to cobble world"><span>b</span><span>a</span><span>c</span><span>k</span><span>.</span><span>.</span><span>.</span></div>
 <div id="projects-prompt">click e</div>
 <button id="laptop-close" type="button" aria-label="close">×</button>
+<!-- Visible only while computer-view is open: opens paattikiiltoon.fi in a new tab. -->
+<button id="laptop-open-site" type="button">click to open</button>
 <div id="fade"></div>
 <div id="words" aria-hidden="true">
   <div class="word top">relax</div>
@@ -1208,21 +1236,38 @@ function _getAudioCtx() {
 function playFootstep() {
   const actx = _getAudioCtx();
   if (!actx) return;
-  // Short sine "pop" with a faint noise tail — reads as a soft little step.
+  // Musical kick: low sine body with a fast pitch drop + tiny noise click
+  // for the transient.  Slight random pitch variance per step.
   const now = actx.currentTime;
+  const f0  = 140 + Math.random() * 35;    // ~140–175 Hz starting pitch
+  const f1  = 42  + Math.random() * 10;    // ~42–52 Hz bottom
+
+  // Body
   const osc = actx.createOscillator();
   osc.type = 'sine';
-  // small random pitch wobble so consecutive steps don't sound identical
-  const f = 540 + Math.random() * 90;
-  osc.frequency.setValueAtTime(f * 1.35, now);
-  osc.frequency.exponentialRampToValueAtTime(f, now + 0.06);
+  osc.frequency.setValueAtTime(f0, now);
+  osc.frequency.exponentialRampToValueAtTime(f1, now + 0.10);
   const gain = actx.createGain();
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.10, now + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+  gain.gain.exponentialRampToValueAtTime(0.32, now + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
   osc.connect(gain); gain.connect(actx.destination);
   osc.start(now);
-  osc.stop(now + 0.18);
+  osc.stop(now + 0.26);
+
+  // Click — short white-noise burst at the very start, gives the kick punch.
+  const clickLen = Math.max(1, Math.floor(actx.sampleRate * 0.006));
+  const clickBuf = actx.createBuffer(1, clickLen, actx.sampleRate);
+  const cd = clickBuf.getChannelData(0);
+  for (let i = 0; i < clickLen; i++) {
+    cd[i] = (Math.random() * 2 - 1) * (1 - i / clickLen);
+  }
+  const click = actx.createBufferSource();
+  click.buffer = clickBuf;
+  const clickGain = actx.createGain();
+  clickGain.gain.value = 0.10;
+  click.connect(clickGain); clickGain.connect(actx.destination);
+  click.start(now);
 }
 let _footstepTimer = 0;
 function maybeFootstep(isWalking, dt) {
@@ -3402,46 +3447,6 @@ function buildProjectsScene() {
   screenMesh.rotation.x = lidTilt;
   scene.add(screenMesh);
 
-  // ---- "click to open" button on the desk next to the laptop ----
-  // A small physical button the player raycasts and clicks to open the
-  // real paattikiiltoon.fi page in a new tab.  Sits on top of the bench
-  // surface to the right of the laptop.
-  const deskBtnCanvas = document.createElement('canvas');
-  deskBtnCanvas.width = 384; deskBtnCanvas.height = 128;
-  const dbctx = deskBtnCanvas.getContext('2d');
-  // base — warm off-white plate
-  dbctx.fillStyle = '#f4ead2';
-  dbctx.fillRect(0, 0, 384, 128);
-  // dark border
-  dbctx.strokeStyle = '#1f1b14';
-  dbctx.lineWidth = 8;
-  dbctx.strokeRect(4, 4, 376, 120);
-  // label
-  dbctx.fillStyle = '#1f1b14';
-  dbctx.font = 'bold 44px serif';
-  dbctx.textAlign = 'center';
-  dbctx.textBaseline = 'middle';
-  dbctx.fillText('click to open ↗', 192, 64);
-  const deskBtnTex = new THREE.CanvasTexture(deskBtnCanvas);
-  deskBtnTex.colorSpace = THREE.SRGBColorSpace;
-  deskBtnTex.anisotropy = 8;
-  const deskBtnTopMat = new THREE.MeshStandardMaterial({ map: deskBtnTex, roughness: 0.75 });
-  const deskBtnSideMat = new THREE.MeshStandardMaterial({ color: 0x564021, roughness: 0.85 });
-  // BoxGeometry face order: +X, -X, +Y(top), -Y, +Z, -Z
-  const deskBtnMats = [
-    deskBtnSideMat, deskBtnSideMat, deskBtnTopMat,
-    deskBtnSideMat, deskBtnSideMat, deskBtnSideMat,
-  ];
-  const deskBtnMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(0.36, 0.045, 0.14),
-    deskBtnMats
-  );
-  deskBtnMesh.position.set(0.55, LAPTOP.y + 0.045, LAPTOP.z + 0.10);
-  deskBtnMesh.castShadow = true;
-  deskBtnMesh.receiveShadow = true;
-  deskBtnMesh.userData.isDeskOpenBtn = true;
-  scene.add(deskBtnMesh);
-
   // (the old gray-blue stack of 3 books is replaced by an interactable
   // pair of books built later in this scene)
 
@@ -3885,7 +3890,6 @@ function buildProjectsScene() {
     laptopScreenTilt: lidTilt,
     laptopScreenMesh: screenMesh,
     laptopBezelMesh: bezel,
-    deskOpenBtnMesh: deskBtnMesh,
     // books + open-book mesh (interactable like the laptop)
     books,
     openBook,
@@ -4043,6 +4047,16 @@ html { scroll-behavior: smooth; }
     }
   });
 
+  // "click to open" pill — visible only while in the computer view, styled
+  // to match the intro tap-to-begin button.  Click → open paattikiiltoon.fi
+  // in a new tab.
+  const laptopOpenSiteBtn = document.getElementById('laptop-open-site');
+  if (laptopOpenSiteBtn) {
+    laptopOpenSiteBtn.addEventListener('click', () => {
+      try { window.open('https://www.paattikiiltoon.fi/', '_blank', 'noopener'); } catch (_) {}
+    });
+  }
+
   // stages: 'intro' (controllable), 'fall' (cinematic, in white world),
   //         'psych' (trip), 'cobble' (controllable), 'beach' (cinematic)
   let stage = 'intro';
@@ -4141,21 +4155,6 @@ html { scroll-behavior: smooth; }
     const lf = projectsWorld && projectsWorld.laptopIframe;
     if (lf && (e.target === lf || lf.contains?.(e.target))) return;
     try { focusSink?.focus({ preventScroll: true }); } catch (_) {}
-
-    // Desk "click to open" button — clickable while in the projects world
-    // outside any zoomed-in view.  Opens paattikiiltoon.fi in a new tab.
-    if (projectsWorld && stage === 'projects' &&
-        !projectsWorld.computerActive && !projectsWorld.boxActive && !projectsWorld.bookActive &&
-        projectsWorld.deskOpenBtnMesh) {
-      _gameNDC.x = (e.clientX / window.innerWidth)  * 2 - 1;
-      _gameNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
-      _gameRaycaster.setFromCamera(_gameNDC, projectsWorld.camera);
-      const hits = _gameRaycaster.intersectObject(projectsWorld.deskOpenBtnMesh, false);
-      if (hits.length > 0) {
-        try { window.open('https://www.paattikiiltoon.fi/', '_blank', 'noopener'); } catch (_) {}
-        return;
-      }
-    }
 
     // whack-a-mole hit detection
     if (projectsWorld && projectsWorld.boxActive) {
@@ -4354,6 +4353,8 @@ html { scroll-behavior: smooth; }
       if (projectsWorld.laptopScreenMesh) projectsWorld.laptopScreenMesh.visible = true;
       const cb = document.getElementById('laptop-close');
       if (cb) cb.style.display = 'none';
+      const losb = document.getElementById('laptop-open-site');
+      if (losb) losb.style.display = 'none';
       projectsWorld.computerActive = false;
       projectsWorld.bookActive = false;
       projectsWorld.boxActive = false;
@@ -5586,6 +5587,7 @@ html { scroll-behavior: smooth; }
       if (projectsWorld.laptopCssObj) projectsWorld.laptopCssObj.visible = true;
       if (projectsWorld.laptopIframe) projectsWorld.laptopIframe.style.pointerEvents = 'auto';
       if (laptopCloseBtn) laptopCloseBtn.style.display = 'block';
+      if (laptopOpenSiteBtn) laptopOpenSiteBtn.style.display = 'block';
 
       projectsPromptEl.style.display = 'none';
 
@@ -5607,6 +5609,7 @@ html { scroll-behavior: smooth; }
       if (projectsWorld.laptopCssObj) projectsWorld.laptopCssObj.visible = false;
       if (projectsWorld.laptopIframe) projectsWorld.laptopIframe.style.pointerEvents = 'none';
       if (laptopCloseBtn) laptopCloseBtn.style.display = 'none';
+      if (laptopOpenSiteBtn) laptopOpenSiteBtn.style.display = 'none';
     }
 
     // smoothly return camera to the standard top-down view if it had moved
