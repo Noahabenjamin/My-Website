@@ -4162,12 +4162,21 @@ html { scroll-behavior: smooth; }
   padding: 6px 10px; border-radius: 999px;
   pointer-events: none;
 }
-</style></head><body>
+</style></head><body tabindex="-1">
 <iframe class="frame" src="${PAATTIKIILTOON_URL}" scrolling="no" referrerpolicy="no-referrer"></iframe>
 <div class="banner">click to open ↗</div>
 <script>
+  // Click anywhere on the laptop shell → open the real site in a new tab.
   document.addEventListener('click', function(){
     window.open('${PAATTIKIILTOON_URL}', '_blank', 'noopener');
+  });
+  // E or ESC inside the laptop shell → ask the parent to close computer view.
+  document.addEventListener('keydown', function(e){
+    var k = (e.key || '').toLowerCase();
+    if (k === 'e' || k === 'escape') {
+      e.preventDefault();
+      try { window.parent.__noahCloseLaptop && window.parent.__noahCloseLaptop(); } catch (_) {}
+    }
   });
 <\/script>
 </body></html>`;
@@ -4204,6 +4213,19 @@ html { scroll-behavior: smooth; }
       restoreParentFocus();
     }
   }
+  // Global hook the srcdoc's own keydown listener calls.
+  window.__noahCloseLaptop = exitComputerFromIframe;
+  // Capture-phase safety net at the window level: even if the parent's
+  // bubble-phase keydown listener runs into a focus issue, this fires first
+  // on every keydown that does reach the window and exits computer view.
+  window.addEventListener('keydown', (e) => {
+    if (!projectsWorld || !projectsWorld.computerActive) return;
+    const k = (e.key || '').toLowerCase();
+    if (k === 'e' || k === 'escape') {
+      e.preventDefault();
+      exitComputerFromIframe();
+    }
+  }, true);
   // Same-origin srcdoc would let us listen for keys inside the iframe; for
   // cross-origin (paattikiiltoon.fi) this is silently blocked.  Either way,
   // bouncing focus back to the parent on mouseleave restores E/ESC.
