@@ -1500,12 +1500,40 @@ function buildPsychScene() {
   // bubbles rising in the background, baymax sinking and trying to swim up.
   const scene = new THREE.Scene();
 
+  // ---- underwater background video (Blue movie.mov) ----
+  // Plays once, slightly slowed.  We feed it into the gradient shader as
+  // a VideoTexture so the gradient and the video read together as one
+  // underwater backdrop.
+  const psychVideoEl = document.createElement('video');
+  psychVideoEl.src = 'underwater.mov';
+  psychVideoEl.muted = true;
+  psychVideoEl.playsInline = true;
+  psychVideoEl.preload = 'auto';
+  psychVideoEl.loop = false;
+  psychVideoEl.playbackRate = 0.85;
+  psychVideoEl.crossOrigin = 'anonymous';
+  psychVideoEl.style.display = 'none';
+  document.body.appendChild(psychVideoEl);
+  // Pause on the final frame so the underwater scene stays composed even
+  // after the clip finishes.
+  psychVideoEl.addEventListener('ended', () => {
+    try { psychVideoEl.pause(); } catch (_) {}
+  });
+  const psychVideoTex = new THREE.VideoTexture(psychVideoEl);
+  psychVideoTex.colorSpace = THREE.SRGBColorSpace;
+  psychVideoTex.minFilter = THREE.LinearFilter;
+  psychVideoTex.magFilter = THREE.LinearFilter;
+
   // gradient background — light/dark blue at top, very dark blue at bottom,
-  // with subtle caustic shimmer near the top
+  // with subtle caustic shimmer near the top.  Now mixed ~30% with the
+  // underwater video for an organic textural feel.
   const bgMat = new THREE.ShaderMaterial({
     uniforms: {
-      uTime:   { value: 0 },
-      uAspect: { value: window.innerWidth / window.innerHeight },
+      uTime:     { value: 0 },
+      uAspect:   { value: window.innerWidth / window.innerHeight },
+      uVideo:    { value: psychVideoTex },
+      uVideoMix: { value: 0.32 },
+      uFadeOut:  { value: 0.0 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -1516,32 +1544,39 @@ function buildPsychScene() {
     `,
     fragmentShader: `
       precision highp float;
-      uniform float uTime;
-      uniform float uAspect;
-      varying vec2 vUv;
+      uniform float     uTime;
+      uniform float     uAspect;
+      uniform sampler2D uVideo;
+      uniform float     uVideoMix;
+      uniform float     uFadeOut;
+      varying vec2      vUv;
 
       void main() {
-        // Bright at the top with NO darkening — the upper half is held at the
-        // bright turquoise top color, only the lower portion darkens.
-        vec3 topColor = vec3(0.55, 0.92, 0.92);   // bright turquoise
-        vec3 midColor = vec3(0.28, 0.72, 0.78);   // mid sea blue
-        vec3 botColor = vec3(0.10, 0.30, 0.42);   // mild dark blue
+        vec3 topColor = vec3(0.55, 0.92, 0.92);
+        vec3 midColor = vec3(0.28, 0.72, 0.78);
+        vec3 botColor = vec3(0.10, 0.30, 0.42);
         float h = pow(vUv.y, 0.45);
         vec3 col = mix(botColor, midColor, smoothstep(0.0, 0.32, h));
-        // hold topColor across the entire upper half
         col = mix(col, topColor, smoothstep(0.32, 0.55, h));
 
-        // sparkle / caustics across the upper half
+        // caustic sparkle
         float caust =
           sin(vUv.x * 22.0 + sin(vUv.y * 4.0 + uTime * 0.4) * 1.4) *
           sin(vUv.y * 16.0 - uTime * 0.3);
         caust = max(0.0, caust);
         col += vec3(0.18, 0.26, 0.28) * caust * smoothstep(0.40, 1.0, vUv.y) * 0.35;
 
-        // no vignette darkening at the top — only on the lower corners
+        // soft corner vignette only at the bottom
         float vig = 1.0 - smoothstep(0.65, 1.15, length((vUv - 0.5) * vec2(uAspect, 1.0)));
         float bottomMask = 1.0 - smoothstep(0.0, 0.55, vUv.y);
         col *= mix(1.0, mix(0.97, 1.0, vig), bottomMask);
+
+        // mix the underwater video on top (cover-style sampling)
+        vec3 vid = texture2D(uVideo, vUv).rgb;
+        col = mix(col, vid, uVideoMix);
+
+        // global fade-to-black used in the final descent phase
+        col *= (1.0 - uFadeOut);
 
         gl_FragColor = vec4(col, 1.0);
       }
@@ -1566,11 +1601,12 @@ function buildPsychScene() {
   baymax.position.set(0, 2.2, 0);
   scene.add(baymax);
 
-  // small bubble pool — bubbles spawn from baymax's mouth and drift upward.
+  // bubble pool — bubbles spawn from baymax's mouth and drift upward, plus
+  // a heavy splash burst around his body when he first hits the water.
   // Each bubble has its own material so it can fade independently as it rises.
   const bubbles = [];
   const sharedGeom = new THREE.SphereGeometry(1, 10, 8);
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 220; i++) {
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -1600,6 +1636,8 @@ function buildPsychScene() {
   return {
     scene, camera, baymax, bgMat, bubbles,
     bubbleEmitT: 0,
+    videoEl: psychVideoEl,
+    splashFired: false,
   };
 }
 
@@ -4625,6 +4663,18 @@ html { scroll-behavior: smooth; }
     if (name === 'psych') {
       fade.style.opacity = '0';
       flashCut();
+      // start the underwater video fresh + reset the splash flag so we
+      // emit a new bubble burst on entry
+      if (psych && psych.videoEl) {
+        try {
+          psych.videoEl.currentTime = 0;
+          psych.videoEl.playbackRate = 0.85;
+          const p = psych.videoEl.play();
+          if (p && typeof p.then === 'function') p.catch(() => {});
+        } catch (_) {}
+      }
+      if (psych) psych.splashFired = false;
+      if (psych && psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = 0.0;
     } else if (name === 'cobble') {
       vignette.style.opacity = '0';
       fade.style.opacity = '0';
@@ -4832,14 +4882,52 @@ html { scroll-behavior: smooth; }
 
   // ---- psych update (underwater, 5 s total) ----
   // Phases:
-  //   0.0 – 0.8 : sinks from the surface to the middle
-  //   0.8 – 2.0 : breast-stroke #1 (slow)
-  //   2.0 – 3.2 : breast-stroke #2 (slow)
-  //   3.2 – 3.6 : drifts upward, peaks
-  //   3.6 – 4.2 : loses consciousness — limbs slacken, head lolls
-  //   4.2 – 5.0 : sinks back down
-  const PSYCH_DUR = 5.0;
-  const STROKE_DUR = 1.2;          // slower strokes
+  //   0.00 – 0.55 : FAST splash-down to the middle of the screen w/ a heavy bubble burst
+  //   0.55 – 0.85 : settle / brief pause
+  //   0.85 – 2.00 : slow breast-stroke #1 (lifts a bit)
+  //   2.00 – 3.15 : slow breast-stroke #2 (lifts a bit more)
+  //   3.15 – 5.00 : everything fades out, Baymax accelerates straight down into darkness
+  const PSYCH_DUR     = 5.0;
+  const PSYCH_FALL    = 0.55;
+  const PSYCH_SETTLE  = 0.85;
+  const STROKE_DUR    = 1.15;
+  const STROKE1_END   = PSYCH_SETTLE + STROKE_DUR;          // 2.00
+  const STROKE2_END   = STROKE1_END + STROKE_DUR;           // 3.15
+  const DARK_START    = STROKE2_END;
+  const DARK_DUR      = PSYCH_DUR - DARK_START;             // 1.85
+  // Spawn a heavy splash burst once at the very start of the scene
+  function fireSplashBurst(b) {
+    if (!psych.bubbles) return;
+    b.updateMatrixWorld();
+    const origin = new THREE.Vector3(0, 0.6, 0);
+    b.localToWorld(origin);
+    let count = 0;
+    for (const bb of psych.bubbles) {
+      if (bb.userData.alive) continue;
+      if (count >= 150) break;
+      // jitter around Baymax in a small dome
+      const ang   = Math.random() * Math.PI * 2;
+      const rad   = 0.05 + Math.random() * 0.95;
+      const drop  = (Math.random() - 0.3) * 0.6;
+      bb.position.set(
+        origin.x + Math.cos(ang) * rad,
+        origin.y + drop,
+        origin.z + Math.sin(ang) * rad * 0.5
+      );
+      const r = 0.018 + Math.random() * 0.090;             // wide size variety
+      bb.scale.setScalar(r);
+      bb.userData.alive = true;
+      bb.userData.age   = 0;
+      bb.userData.life  = 0.9 + Math.random() * 1.8;
+      bb.userData.speed = 0.9 + Math.random() * 1.6;
+      bb.userData.wobblePhase = Math.random() * Math.PI * 2;
+      bb.userData.wobbleFreq  = 1.6 + Math.random() * 2.0;
+      bb.userData.wobbleAmp   = 0.10 + Math.random() * 0.14;
+      bb.material.opacity = 0.0;
+      bb.visible = true;
+      count++;
+    }
+  }
   function updatePsych(dt) {
     psych.bgMat.uniforms.uTime.value += dt;
     const t = stageT;
@@ -4889,51 +4977,57 @@ html { scroll-behavior: smooth; }
     let bodyTilt = 0;
     let headX = 0, headY = 0, headZ = 0;
 
-    if (t < 0.8) {
-      const u = t / 0.8;
-      by = THREE.MathUtils.lerp(2.4, 0.0, u);
-      bodyTilt = 0.10 * u;
-      armDown = 0.04 * u;
-    } else if (t < 0.8 + STROKE_DUR) {
-      const u = (t - 0.8) / STROKE_DUR;
+    // Reset shader fade-out each frame (it's only used in the final phase)
+    if (psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = 0.0;
+
+    if (t < PSYCH_FALL) {
+      // 1) Fast splash-down — quadratic acceleration from y=2.5 → y=0
+      const u = t / PSYCH_FALL;
+      by = 2.5 - 2.5 * (u * u);
+      bodyTilt = 0.18 * u;
+      armDown = 0.05 * u;
+      armRotBonus = 0.10 * u;
+      // Heavy bubble burst once at the very first frame of psych
+      if (!psych.splashFired) { fireSplashBurst(b); psych.splashFired = true; }
+    } else if (t < PSYCH_SETTLE) {
+      // 2) Brief settle — Baymax pauses at mid-screen
+      const u = (t - PSYCH_FALL) / (PSYCH_SETTLE - PSYCH_FALL);
+      by = 0.0 - 0.04 * Math.sin(u * Math.PI);
+      bodyTilt = 0.18 * (1 - u);
+      armDown = 0.05;
+    } else if (t < STROKE1_END) {
+      // 3) Stroke #1 (slow, gentle lift)
+      const u = (t - PSYCH_SETTLE) / STROKE_DUR;
       const s = stroke(u);
       armSweep = s.sweep;
       armBack  = s.back;
       armRotBonus = s.rotZ;
       const lift = Math.sin(u * Math.PI) * 0.55;
-      by = 0.0 + lift + u * 0.45;
-      bodyTilt = -0.16 * Math.sin(u * Math.PI);
-    } else if (t < 0.8 + 2 * STROKE_DUR) {
-      const u = (t - 0.8 - STROKE_DUR) / STROKE_DUR;
+      by = 0.0 + lift + u * 0.40;
+      bodyTilt = -0.14 * Math.sin(u * Math.PI);
+    } else if (t < STROKE2_END) {
+      // 4) Stroke #2 (slow, gentle lift)
+      const u = (t - STROKE1_END) / STROKE_DUR;
       const s = stroke(u);
       armSweep = s.sweep;
       armBack  = s.back;
       armRotBonus = s.rotZ;
       const lift = Math.sin(u * Math.PI) * 0.55;
-      by = 0.45 + lift + u * 0.45;
-      bodyTilt = -0.16 * Math.sin(u * Math.PI);
-    } else if (t < 0.8 + 2 * STROKE_DUR + 0.4) {
-      const u = (t - 0.8 - 2 * STROKE_DUR) / 0.4;
-      const eased = 1 - Math.pow(1 - u, 2);
-      by = 0.9 + eased * 0.35;
-    } else if (t < 0.8 + 2 * STROKE_DUR + 0.4 + 0.6) {
-      const u = (t - 0.8 - 2 * STROKE_DUR - 0.4) / 0.6;
-      const eased = smooth(u);
-      by = 1.25 - eased * 0.55;
-      armDown = 0.16 * eased;
-      armRotBonus = -0.35 * eased;
-      bodyTilt = 0.18 * eased;
-      headX = -0.28 * eased;
-      headZ =  0.22 * eased;
+      by = 0.40 + lift + u * 0.40;
+      bodyTilt = -0.14 * Math.sin(u * Math.PI);
     } else {
-      const u = (t - 0.8 - 2 * STROKE_DUR - 0.4 - 0.6) / 0.8;
-      const fall = u * u;
-      by = 0.7 - fall * 3.4;
+      // 5) Everything fades, Baymax accelerates straight down into darkness
+      const u = (t - DARK_START) / DARK_DUR;       // 0 → 1
+      // accelerating fall:  y = peak − a · u²
+      const peak = 0.80;
+      by = peak - 4.5 * u * u;
       armDown = 0.16;
       armRotBonus = -0.35;
       bodyTilt = 0.18 + 0.05 * u;
       headX = -0.28;
       headZ =  0.22;
+      // fade the gradient + video + bubbles out to black
+      if (psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = Math.min(1, u * 1.15);
     }
 
     setArms(armSweep, armBack, armDown);
@@ -5000,11 +5094,13 @@ html { scroll-behavior: smooth; }
       bb.position.x +=
         Math.cos(bb.userData.wobblePhase + bb.userData.age * bb.userData.wobbleFreq) *
         bb.userData.wobbleAmp * dt;
-      // fade in quickly, fade out near the end of life
+      // fade in quickly, fade out near the end of life — and apply the
+      // global scene fade-out during the dark final phase
       const a = bb.userData.age, L = bb.userData.life;
       const fadeIn  = Math.min(1, a / 0.25);
       const fadeOut = Math.min(1, (L - a) / 0.6);
-      bb.material.opacity = 0.7 * Math.min(fadeIn, fadeOut);
+      const sceneFade = 1.0 - (psych.bgMat ? psych.bgMat.uniforms.uFadeOut.value : 0);
+      bb.material.opacity = 0.7 * Math.min(fadeIn, fadeOut) * sceneFade;
     }
 
     if (stageT >= PSYCH_DUR) setStage('cobble');
