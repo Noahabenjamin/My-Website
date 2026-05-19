@@ -296,10 +296,7 @@
   #psych-video-overlay {
     position: fixed; inset: 0;
     width: 100%; height: 100%;
-    /* contain (not cover) so the whole frame stays visible at the video's
-       real aspect ratio; the empty letterbox strips act as a dark
-       underwater "buffer" around the clip in full screen. */
-    object-fit: contain;
+    object-fit: cover;
     z-index: 36;
     pointer-events: none;
     opacity: 1;
@@ -308,6 +305,20 @@
     display: none;
   }
   #psych-video-overlay.visible { display: block; }
+  /* Thin black buffer bars at the very top and very bottom of the screen
+     while the psych scene is active — frames the video on either edge. */
+  .psych-buffer {
+    position: fixed;
+    left: 0; right: 0;
+    height: 42px;
+    background: #000;
+    z-index: 37;
+    pointer-events: none;
+    display: none;
+  }
+  .psych-buffer.visible { display: block; }
+  #psych-buffer-top { top: 0; }
+  #psych-buffer-bot { bottom: 0; }
 </style>
 </head>
 <body tabindex="-1">
@@ -331,6 +342,9 @@
   <source src="underwater.mov" type="video/quicktime" />
   <source src="underwater.mov" type="video/mp4" />
 </video>
+<!-- Black buffer bars framing the underwater video on top + bottom -->
+<div id="psych-buffer-top" class="psych-buffer"></div>
+<div id="psych-buffer-bot" class="psych-buffer"></div>
 <div id="vignette"></div>
 <div id="hint">use W A S D or arrow keys to move</div>
 <div id="beach-back" aria-label="back to cobble world"><span>b</span><span>a</span><span>c</span><span>k</span><span>.</span><span>.</span><span>.</span></div>
@@ -4675,6 +4689,8 @@ html { scroll-behavior: smooth; }
       }
     }
 
+    const psychBufTop = document.getElementById('psych-buffer-top');
+    const psychBufBot = document.getElementById('psych-buffer-bot');
     if (name === 'psych') {
       fade.style.opacity = '0';
       flashCut();
@@ -4688,6 +4704,8 @@ html { scroll-behavior: smooth; }
           if (p && typeof p.then === 'function') p.catch(() => {});
         } catch (_) {}
       }
+      if (psychBufTop) psychBufTop.classList.add('visible');
+      if (psychBufBot) psychBufBot.classList.add('visible');
       if (psych) { psych.splashFired = false; psych.splashEmitT = 0; }
       if (psych && psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = 0.0;
     } else {
@@ -4697,6 +4715,8 @@ html { scroll-behavior: smooth; }
         psych.videoEl.classList.remove('visible');
         try { psych.videoEl.pause(); } catch (_) {}
       }
+      if (psychBufTop) psychBufTop.classList.remove('visible');
+      if (psychBufBot) psychBufBot.classList.remove('visible');
     }
     if (name === 'cobble') {
       vignette.style.opacity = '0';
