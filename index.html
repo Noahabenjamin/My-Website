@@ -3529,6 +3529,184 @@ function buildCaveScene() {
 // Scene 8 — PROJECTS (entered through the "projects" exit, left edge of cobble)
 // ==========================================================================
 
+function buildCorkBoardWithMap() {
+  // Standing cork board with metal frame + legs, holding a stylised world
+  // map pinned at the four corners.  Returned as a group centred at the
+  // floor, ready to be positioned + rotated by the caller.
+  const g = new THREE.Group();
+
+  // ---- cork texture canvas ----
+  const cw = 512, ch = 384;
+  const corkCv = document.createElement('canvas');
+  corkCv.width = cw; corkCv.height = ch;
+  const cctx = corkCv.getContext('2d');
+  cctx.fillStyle = '#a87842';
+  cctx.fillRect(0, 0, cw, ch);
+  for (let i = 0; i < 4500; i++) {
+    const v = 95 + Math.floor(Math.random() * 90);
+    cctx.fillStyle = `rgb(${v + 30}, ${v}, ${Math.max(0, v - 25)})`;
+    const x = Math.random() * cw;
+    const y = Math.random() * ch;
+    const s = 1.2 + Math.random() * 2.4;
+    cctx.beginPath();
+    cctx.arc(x, y, s, 0, Math.PI * 2);
+    cctx.fill();
+  }
+  const corkTex = new THREE.CanvasTexture(corkCv);
+  corkTex.colorSpace = THREE.SRGBColorSpace;
+  corkTex.anisotropy = 8;
+  const corkMat = new THREE.MeshStandardMaterial({ map: corkTex, roughness: 0.95 });
+
+  // ---- panel + mounting height ----
+  const BW = 2.0, BH = 1.6, BD = 0.04;
+  const PANEL_Y = 1.55;                              // panel centre
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BD), corkMat);
+  panel.position.y = PANEL_Y;
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+  g.add(panel);
+
+  // ---- metal frame around the cork ----
+  const metalMat = new THREE.MeshStandardMaterial({ color: 0x8b9094, roughness: 0.5, metalness: 0.8 });
+  const fThick = 0.05;
+  // top + bottom rails
+  for (const dy of [BH / 2, -BH / 2]) {
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(BW + fThick * 2, fThick, BD + 0.014), metalMat
+    );
+    rail.position.set(0, PANEL_Y + dy, 0);
+    rail.castShadow = true;
+    g.add(rail);
+  }
+  // left + right rails
+  for (const dx of [-(BW / 2 + fThick / 2), (BW / 2 + fThick / 2)]) {
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(fThick, BH, BD + 0.014), metalMat
+    );
+    rail.position.set(dx, PANEL_Y, 0);
+    rail.castShadow = true;
+    g.add(rail);
+  }
+
+  // ---- metal legs (a pair of straight verticals with feet and a diagonal brace) ----
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x6a6e74, roughness: 0.5, metalness: 0.85 });
+  const legPairX = 0.72;
+  const legHeight = PANEL_Y - BH / 2;                 // floor → panel bottom
+  for (const x of [-legPairX, legPairX]) {
+    const leg = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.028, 0.028, legHeight, 12), legMat
+    );
+    leg.position.set(x, legHeight / 2, 0);
+    leg.castShadow = true;
+    g.add(leg);
+    const foot = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.085, 0.10, 0.028, 16), legMat
+    );
+    foot.position.set(x, 0.014, 0);
+    foot.castShadow = true;
+    g.add(foot);
+  }
+  // diagonal back brace between the two legs
+  const brace = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.018, 0.018, 1.6, 10), legMat
+  );
+  brace.position.set(0, 0.45, -0.05);
+  brace.rotation.z = Math.PI / 2;
+  g.add(brace);
+
+  // ---- world map canvas ----
+  const mw = 1024, mh = 768;
+  const mcv = document.createElement('canvas');
+  mcv.width = mw; mcv.height = mh;
+  const mctx = mcv.getContext('2d');
+  // aged paper background
+  mctx.fillStyle = '#f5e8c0';
+  mctx.fillRect(0, 0, mw, mh);
+  // subtle paper grain
+  for (let i = 0; i < 1600; i++) {
+    mctx.fillStyle = `rgba(120, 80, 30, ${Math.random() * 0.06})`;
+    mctx.fillRect(Math.random() * mw, Math.random() * mh, 1.5, 1.5);
+  }
+  // faint lat/long grid
+  mctx.strokeStyle = 'rgba(80, 50, 20, 0.18)';
+  mctx.lineWidth = 1;
+  for (let x = 100; x < mw; x += 100) {
+    mctx.beginPath(); mctx.moveTo(x, 60); mctx.lineTo(x, mh - 60); mctx.stroke();
+  }
+  for (let y = 100; y < mh; y += 100) {
+    mctx.beginPath(); mctx.moveTo(60, y); mctx.lineTo(mw - 60, y); mctx.stroke();
+  }
+  // continents — stylised blobs
+  mctx.fillStyle = '#5a8c4a';
+  function blob(pts) {
+    mctx.beginPath();
+    mctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) mctx.lineTo(pts[i][0], pts[i][1]);
+    mctx.closePath();
+    mctx.fill();
+  }
+  blob([[130,230],[280,210],[320,300],[290,400],[200,440],[140,330]]);                   // N. America
+  blob([[290,460],[360,460],[380,580],[330,640],[280,560]]);                             // S. America
+  blob([[490,220],[600,210],[610,280],[510,290]]);                                       // Europe
+  blob([[510,300],[620,300],[660,440],[580,560],[520,500],[490,360]]);                   // Africa
+  blob([[600,200],[880,200],[910,330],[800,390],[700,360],[620,290]]);                   // Asia
+  blob([[820,490],[930,480],[940,550],[850,570]]);                                       // Australia
+  // border + title
+  mctx.strokeStyle = '#3a2410';
+  mctx.lineWidth = 7;
+  mctx.strokeRect(46, 46, mw - 92, mh - 92);
+  mctx.fillStyle = '#3a2410';
+  mctx.font = 'italic 38px "Cormorant Garamond", serif';
+  mctx.textAlign = 'center';
+  mctx.fillText('our world', mw / 2, 100);
+  mctx.font = '14px serif';
+  mctx.fillText('— 2026 —', mw / 2, mh - 70);
+
+  const mapTex = new THREE.CanvasTexture(mcv);
+  mapTex.colorSpace = THREE.SRGBColorSpace;
+  mapTex.anisotropy = 8;
+  const mapMat = new THREE.MeshStandardMaterial({ map: mapTex, roughness: 0.85 });
+
+  // Map sized to leave a small cork margin around it
+  const MW = BW * 0.86;
+  const MH = BH * 0.78;
+  const map = new THREE.Mesh(new THREE.PlaneGeometry(MW, MH), mapMat);
+  map.position.set(0, PANEL_Y, BD / 2 + 0.001);
+  g.add(map);
+
+  // ---- four red push pins at the corners of the map ----
+  const pinHeadMat = new THREE.MeshStandardMaterial({
+    color: 0xd03030, roughness: 0.4, metalness: 0.35, emissive: 0x401010, emissiveIntensity: 0.2,
+  });
+  const pinShaftMat = new THREE.MeshStandardMaterial({
+    color: 0x4a4a4a, roughness: 0.3, metalness: 0.85,
+  });
+  const pinInset = 0.06;
+  const pinCorners = [
+    [-MW / 2 + pinInset,  MH / 2 - pinInset],
+    [ MW / 2 - pinInset,  MH / 2 - pinInset],
+    [-MW / 2 + pinInset, -MH / 2 + pinInset],
+    [ MW / 2 - pinInset, -MH / 2 + pinInset],
+  ];
+  for (const [px, py] of pinCorners) {
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.009, 0.009, 0.030, 8), pinShaftMat
+    );
+    // align shaft along Z (cork normal)
+    shaft.rotation.x = Math.PI / 2;
+    shaft.position.set(px, PANEL_Y + py, BD / 2 + 0.015);
+    g.add(shaft);
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.028, 14, 12), pinHeadMat
+    );
+    head.position.set(px, PANEL_Y + py, BD / 2 + 0.040);
+    head.castShadow = true;
+    g.add(head);
+  }
+
+  return g;
+}
+
 function buildProjectsScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x222a36);
@@ -4084,6 +4262,13 @@ function buildProjectsScene() {
   const flipPage = flipPivot;
   openBook.visible = false;
   scene.add(openBook);
+
+  // standing cork board with a world map, off to the left of the bench/crates,
+  // rotated diagonally so its face is roughly perpendicular to the table.
+  const corkBoard = buildCorkBoardWithMap();
+  corkBoard.position.set(-7.6, 0, -0.8);
+  corkBoard.rotation.y = Math.PI / 4;
+  scene.add(corkBoard);
 
   // exit sign — points back to the RIGHT (the entry/exit edge for projects)
   const exitSign = buildExitSign('right');
