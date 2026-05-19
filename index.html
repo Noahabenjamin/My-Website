@@ -288,6 +288,20 @@
     transition: opacity 0.3s ease-out, background 0.2s;
   }
   #psych-skip:hover { background: rgba(255,255,255,0.20); }
+  /* Blue-movie overlay — shown only during the psych (underwater) stage.
+     mix-blend-mode: screen so its bright/sparkly parts add onto the scene
+     while its darker parts let Baymax + the gradient show through cleanly. */
+  #psych-video-overlay {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    z-index: 6;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    opacity: 1;
+    display: none;
+  }
+  #psych-video-overlay.visible { display: block; }
 </style>
 </head>
 <body tabindex="-1">
@@ -304,6 +318,13 @@
 </div>
 <!-- Skip-to-cobble button shown only during the underwater (psych) scene. -->
 <button id="psych-skip" type="button">skip →</button>
+<!-- Blue movie overlay for the underwater scene: a real <video> element that
+     sits on top of the WebGL canvas with a "screen" blend mode so Baymax,
+     bubbles and the gradient still show through. -->
+<video id="psych-video-overlay" preload="auto" playsinline muted>
+  <source src="underwater.mov" type="video/quicktime" />
+  <source src="underwater.mov" type="video/mp4" />
+</video>
 <div id="vignette"></div>
 <div id="hint">use W A S D or arrow keys to move</div>
 <div id="beach-back" aria-label="back to cobble world"><span>b</span><span>a</span><span>c</span><span>k</span><span>.</span><span>.</span><span>.</span></div>
@@ -1500,40 +1521,31 @@ function buildPsychScene() {
   // bubbles rising in the background, baymax sinking and trying to swim up.
   const scene = new THREE.Scene();
 
-  // ---- underwater background video (Blue movie.mov) ----
-  // Plays once, slightly slowed.  We feed it into the gradient shader as
-  // a VideoTexture so the gradient and the video read together as one
-  // underwater backdrop.
-  const psychVideoEl = document.createElement('video');
-  psychVideoEl.src = 'underwater.mov';
-  psychVideoEl.muted = true;
-  psychVideoEl.playsInline = true;
-  psychVideoEl.preload = 'auto';
-  psychVideoEl.loop = false;
-  psychVideoEl.playbackRate = 0.85;
-  psychVideoEl.crossOrigin = 'anonymous';
-  psychVideoEl.style.display = 'none';
-  document.body.appendChild(psychVideoEl);
-  // Pause on the final frame so the underwater scene stays composed even
-  // after the clip finishes.
-  psychVideoEl.addEventListener('ended', () => {
-    try { psychVideoEl.pause(); } catch (_) {}
-  });
-  const psychVideoTex = new THREE.VideoTexture(psychVideoEl);
-  psychVideoTex.colorSpace = THREE.SRGBColorSpace;
-  psychVideoTex.minFilter = THREE.LinearFilter;
-  psychVideoTex.magFilter = THREE.LinearFilter;
+  // ---- underwater video element ----
+  // The Blue movie is rendered as a CSS-blended overlay on top of the
+  // WebGL canvas (see #psych-video-overlay), so Baymax + bubbles + the
+  // shader gradient all read CLEANLY underneath while the video is laid
+  // visually on top.  Playback control lives here.
+  const psychVideoEl = document.getElementById('psych-video-overlay');
+  if (psychVideoEl) {
+    psychVideoEl.muted = true;
+    psychVideoEl.playsInline = true;
+    psychVideoEl.preload = 'auto';
+    psychVideoEl.loop = false;
+    psychVideoEl.playbackRate = 0.85;
+    psychVideoEl.addEventListener('ended', () => {
+      try { psychVideoEl.pause(); } catch (_) {}
+    });
+  }
 
-  // gradient background — light/dark blue at top, very dark blue at bottom,
-  // with subtle caustic shimmer near the top.  Now mixed ~30% with the
-  // underwater video for an organic textural feel.
+  // gradient background — light turquoise top (sun from above) → naturally
+  // darker bottom.  No video baked into this material; the video sits as
+  // a CSS overlay on top of the canvas instead.
   const bgMat = new THREE.ShaderMaterial({
     uniforms: {
-      uTime:     { value: 0 },
-      uAspect:   { value: window.innerWidth / window.innerHeight },
-      uVideo:    { value: psychVideoTex },
-      uVideoMix: { value: 0.85 },
-      uFadeOut:  { value: 0.0 },
+      uTime:    { value: 0 },
+      uAspect:  { value: window.innerWidth / window.innerHeight },
+      uFadeOut: { value: 0.0 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -1546,15 +1558,16 @@ function buildPsychScene() {
       precision highp float;
       uniform float     uTime;
       uniform float     uAspect;
-      uniform sampler2D uVideo;
-      uniform float     uVideoMix;
       uniform float     uFadeOut;
       varying vec2      vUv;
 
       void main() {
-        vec3 topColor = vec3(0.55, 0.92, 0.92);
-        vec3 midColor = vec3(0.28, 0.72, 0.78);
-        vec3 botColor = vec3(0.10, 0.30, 0.42);
+        // Light turquoise at the top, gentle mid sea blue, deeper blue
+        // (not pitch black) at the bottom.  Bottom is darker but still
+        // clearly blue so the scene never feels almost-dark.
+        vec3 topColor = vec3(0.62, 0.95, 0.95);
+        vec3 midColor = vec3(0.38, 0.78, 0.82);
+        vec3 botColor = vec3(0.18, 0.40, 0.52);
         float h = pow(vUv.y, 0.45);
         vec3 col = mix(botColor, midColor, smoothstep(0.0, 0.32, h));
         col = mix(col, topColor, smoothstep(0.32, 0.55, h));
@@ -1570,10 +1583,6 @@ function buildPsychScene() {
         float vig = 1.0 - smoothstep(0.65, 1.15, length((vUv - 0.5) * vec2(uAspect, 1.0)));
         float bottomMask = 1.0 - smoothstep(0.0, 0.55, vUv.y);
         col *= mix(1.0, mix(0.97, 1.0, vig), bottomMask);
-
-        // mix the underwater video on top (cover-style sampling)
-        vec3 vid = texture2D(uVideo, vUv).rgb;
-        col = mix(col, vid, uVideoMix);
 
         // global fade-to-black used in the final descent phase
         col *= (1.0 - uFadeOut);
@@ -4663,9 +4672,9 @@ html { scroll-behavior: smooth; }
     if (name === 'psych') {
       fade.style.opacity = '0';
       flashCut();
-      // start the underwater video fresh + reset the splash flag so we
-      // emit a new bubble burst on entry
+      // show + restart the blue-movie overlay
       if (psych && psych.videoEl) {
+        psych.videoEl.classList.add('visible');
         try {
           psych.videoEl.currentTime = 0;
           psych.videoEl.playbackRate = 0.85;
@@ -4675,7 +4684,15 @@ html { scroll-behavior: smooth; }
       }
       if (psych) { psych.splashFired = false; psych.splashEmitT = 0; }
       if (psych && psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = 0.0;
-    } else if (name === 'cobble') {
+    } else {
+      // any other stage: hide + pause the overlay so it's not bleeding into
+      // other scenes
+      if (psych && psych.videoEl) {
+        psych.videoEl.classList.remove('visible');
+        try { psych.videoEl.pause(); } catch (_) {}
+      }
+    }
+    if (name === 'cobble') {
       vignette.style.opacity = '0';
       fade.style.opacity = '0';
       flashCut();
