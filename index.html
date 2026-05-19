@@ -296,10 +296,7 @@
   #psych-video-overlay {
     position: fixed; inset: 0;
     width: 100%; height: 100%;
-    /* contain (not cover) so the whole frame stays visible at the video's
-       real aspect ratio; the empty letterbox strips act as a dark
-       underwater "buffer" around the clip in full screen. */
-    object-fit: contain;
+    object-fit: cover;
     z-index: 36;
     pointer-events: none;
     opacity: 1;
