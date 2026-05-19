@@ -1532,7 +1532,7 @@ function buildPsychScene() {
       uTime:     { value: 0 },
       uAspect:   { value: window.innerWidth / window.innerHeight },
       uVideo:    { value: psychVideoTex },
-      uVideoMix: { value: 0.32 },
+      uVideoMix: { value: 0.85 },
       uFadeOut:  { value: 0.0 },
     },
     vertexShader: `
@@ -4673,7 +4673,7 @@ html { scroll-behavior: smooth; }
           if (p && typeof p.then === 'function') p.catch(() => {});
         } catch (_) {}
       }
-      if (psych) psych.splashFired = false;
+      if (psych) { psych.splashFired = false; psych.splashEmitT = 0; }
       if (psych && psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = 0.0;
     } else if (name === 'cobble') {
       vignette.style.opacity = '0';
@@ -4895,20 +4895,23 @@ html { scroll-behavior: smooth; }
   const STROKE2_END   = STROKE1_END + STROKE_DUR;           // 3.15
   const DARK_START    = STROKE2_END;
   const DARK_DUR      = PSYCH_DUR - DARK_START;             // 1.85
-  // Spawn a heavy splash burst once at the very start of the scene
-  function fireSplashBurst(b) {
+  // Spawn N splash bubbles around Baymax.  Called once with a big count for
+  // the initial impact, then repeatedly with a small count throughout the
+  // fall + settle phases so the splash plume keeps boiling until he starts
+  // swimming.
+  function fireSplashBurst(b, count = 150) {
     if (!psych.bubbles) return;
     b.updateMatrixWorld();
-    const origin = new THREE.Vector3(0, 0.6, 0);
+    const origin = new THREE.Vector3(0, 0.4, 0);
     b.localToWorld(origin);
-    let count = 0;
+    let spawned = 0;
     for (const bb of psych.bubbles) {
       if (bb.userData.alive) continue;
-      if (count >= 150) break;
+      if (spawned >= count) break;
       // jitter around Baymax in a small dome
       const ang   = Math.random() * Math.PI * 2;
       const rad   = 0.05 + Math.random() * 0.95;
-      const drop  = (Math.random() - 0.3) * 0.6;
+      const drop  = (Math.random() - 0.3) * 0.7;
       bb.position.set(
         origin.x + Math.cos(ang) * rad,
         origin.y + drop,
@@ -4925,7 +4928,7 @@ html { scroll-behavior: smooth; }
       bb.userData.wobbleAmp   = 0.10 + Math.random() * 0.14;
       bb.material.opacity = 0.0;
       bb.visible = true;
-      count++;
+      spawned++;
     }
   }
   function updatePsych(dt) {
@@ -4987,8 +4990,8 @@ html { scroll-behavior: smooth; }
       bodyTilt = 0.18 * u;
       armDown = 0.05 * u;
       armRotBonus = 0.10 * u;
-      // Heavy bubble burst once at the very first frame of psych
-      if (!psych.splashFired) { fireSplashBurst(b); psych.splashFired = true; }
+      // Heavy bubble burst at the very first frame of psych
+      if (!psych.splashFired) { fireSplashBurst(b, 150); psych.splashFired = true; }
     } else if (t < PSYCH_SETTLE) {
       // 2) Brief settle — Baymax pauses at mid-screen
       const u = (t - PSYCH_FALL) / (PSYCH_SETTLE - PSYCH_FALL);
@@ -4996,30 +4999,31 @@ html { scroll-behavior: smooth; }
       bodyTilt = 0.18 * (1 - u);
       armDown = 0.05;
     } else if (t < STROKE1_END) {
-      // 3) Stroke #1 (slow, gentle lift)
+      // 3) Stroke #1 (slow, gentle lift) — small push so Baymax stays close
+      // to the middle of the screen
       const u = (t - PSYCH_SETTLE) / STROKE_DUR;
       const s = stroke(u);
       armSweep = s.sweep;
       armBack  = s.back;
       armRotBonus = s.rotZ;
-      const lift = Math.sin(u * Math.PI) * 0.55;
-      by = 0.0 + lift + u * 0.40;
+      const lift = Math.sin(u * Math.PI) * 0.22;
+      by = 0.0 + lift + u * 0.15;
       bodyTilt = -0.14 * Math.sin(u * Math.PI);
     } else if (t < STROKE2_END) {
-      // 4) Stroke #2 (slow, gentle lift)
+      // 4) Stroke #2 (slow, gentle lift) — small push again, stays mid-screen
       const u = (t - STROKE1_END) / STROKE_DUR;
       const s = stroke(u);
       armSweep = s.sweep;
       armBack  = s.back;
       armRotBonus = s.rotZ;
-      const lift = Math.sin(u * Math.PI) * 0.55;
-      by = 0.40 + lift + u * 0.40;
+      const lift = Math.sin(u * Math.PI) * 0.22;
+      by = 0.15 + lift + u * 0.15;
       bodyTilt = -0.14 * Math.sin(u * Math.PI);
     } else {
       // 5) Everything fades, Baymax accelerates straight down into darkness
       const u = (t - DARK_START) / DARK_DUR;       // 0 → 1
       // accelerating fall:  y = peak − a · u²
-      const peak = 0.80;
+      const peak = 0.30;
       by = peak - 4.5 * u * u;
       armDown = 0.16;
       armRotBonus = -0.35;
@@ -5051,6 +5055,16 @@ html { scroll-behavior: smooth; }
 
     b.position.set(Math.sin(t * 1.2) * 0.08, by, 0);
     b.rotation.set(bodyTilt, 0, Math.sin(t * 1.6) * 0.04);
+
+    // ---- continuous splash plume — fires from the moment Baymax hits the
+    // water until the first breast stroke begins (i.e. fall + settle)
+    if (t < PSYCH_SETTLE) {
+      psych.splashEmitT = (psych.splashEmitT || 0) + dt;
+      while (psych.splashEmitT > 0.05) {
+        psych.splashEmitT -= 0.05;
+        fireSplashBurst(b, 6);
+      }
+    }
 
     // ---- mouth bubbles ---- spawn periodically from baymax's mouth and rise
     psych.bubbleEmitT += dt;
