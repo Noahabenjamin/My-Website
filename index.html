@@ -288,16 +288,16 @@
     transition: opacity 0.3s ease-out, background 0.2s;
   }
   #psych-skip:hover { background: rgba(255,255,255,0.20); }
-  /* Blue-movie overlay — shown only during the psych (underwater) stage.
-     mix-blend-mode: screen so its bright/sparkly parts add onto the scene
-     while its darker parts let Baymax + the gradient show through cleanly. */
+  /* Blue-movie overlay — the topmost layer of the screen during the psych
+     (underwater) stage.  Fully opaque, covers everything below.  Stays on
+     screen the entire time the psych scene is active. */
   #psych-video-overlay {
     position: fixed; inset: 0;
     width: 100%; height: 100%;
     object-fit: cover;
-    z-index: 6;
+    background: #000;
+    z-index: 36;
     pointer-events: none;
-    mix-blend-mode: screen;
     opacity: 1;
     display: none;
   }
