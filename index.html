@@ -161,6 +161,99 @@
   }
   .uc-bar-1 { transform: translateY(-50%) rotate(-32deg); }
   .uc-bar-2 { transform: translateY(-50%) rotate( 32deg); }
+  /* Biotech pin overlay — single element with two modes:
+       .as-tooltip → small chip near the cursor while hovering a pin
+       .as-card    → pop-out card anchored near the clicked pin (title +
+                     description), with the title animating up from the
+                     tooltip position.                                  */
+  #biopharma-overlay {
+    position: fixed;
+    z-index: 36;
+    pointer-events: none;
+    display: none;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    box-sizing: border-box;
+    transition:
+      width 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      max-width 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      padding 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      background-color 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      border-radius 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      left 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+      top 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform, left, top;
+  }
+  #biopharma-overlay .bp-title {
+    color: #f5efe2;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1.25;
+    transition: font-size 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+                margin-bottom 0.28s ease-out;
+    white-space: nowrap;
+  }
+  #biopharma-overlay .bp-desc {
+    color: #cfc7b2;
+    font-size: 13.5px;
+    line-height: 1.5;
+    font-weight: 300;
+    margin-top: 0;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 0.32s ease-out 0.18s, max-height 0.36s ease-out;
+  }
+  #biopharma-overlay .bp-close {
+    position: absolute;
+    top: 6px;
+    right: 12px;
+    color: rgba(245, 239, 226, 0.55);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    display: none;
+  }
+  #biopharma-overlay .bp-close:hover { color: rgba(245, 239, 226, 0.95); }
+  #biopharma-overlay.as-tooltip {
+    display: block;
+    padding: 7px 12px;
+    background: rgba(18, 20, 26, 0.86);
+    color: #f5efe2;
+    border: 1px solid rgba(245, 239, 226, 0.18);
+    border-radius: 6px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    transform: translate(14px, 14px);
+  }
+  #biopharma-overlay.as-tooltip .bp-title { font-size: 14px; }
+  #biopharma-overlay.as-card {
+    display: block;
+    pointer-events: auto;
+    width: 340px;
+    max-width: calc(100vw - 40px);
+    padding: 18px 22px 20px;
+    background: rgba(18, 20, 26, 0.94);
+    border: 1px solid rgba(245, 239, 226, 0.22);
+    border-radius: 12px;
+    box-shadow: 0 28px 60px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  #biopharma-overlay.as-card .bp-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 10px;
+    white-space: normal;
+  }
+  #biopharma-overlay.as-card .bp-desc {
+    opacity: 1;
+    max-height: 360px;
+  }
+  #biopharma-overlay.as-card .bp-close { display: block; }
   /* "click e" HTML overlay for the projects world (positioned in JS) */
   #projects-prompt {
     position: fixed;
@@ -332,6 +425,12 @@
 <div id="hint">use W A S D or arrow keys to move</div>
 <div id="beach-back" aria-label="back to cobble world"><span>b</span><span>a</span><span>c</span><span>k</span><span>.</span><span>.</span><span>.</span></div>
 <div id="projects-prompt">click e</div>
+<!-- Biotech-pin overlay: hover -> tooltip, click -> pop-out card. -->
+<div id="biopharma-overlay" aria-hidden="true">
+  <span class="bp-close" role="button" aria-label="close">×</span>
+  <div class="bp-title"></div>
+  <div class="bp-desc"></div>
+</div>
 <button id="laptop-close" type="button" aria-label="close">×</button>
 <!-- Visible only while computer-view is open: opens paattikiiltoon.fi in a new tab. -->
 <button id="laptop-open-site" type="button">click to open</button>
@@ -3613,67 +3712,209 @@ function buildCorkBoardWithMap(opts = {}) {
   g.add(brace);
 
   // ---- world map canvas ----
-  // Wider canvas to match the new wider board aspect.
-  const mw = 1280, mh = 768;
+  // 2:1 aspect (1280×640) so the equirectangular projection used by the
+  // continent polygons + the biotech pins maps lon/lat directly onto pixels
+  // without distortion.  The texture is stretched slightly to fit the
+  // wider board face — that's fine, it's a uniform horizontal scale and
+  // pins ride the same scale so they still land on the right coastlines.
+  const mw = realistic ? 1280 : 1280;
+  const mh = realistic ? 640  : 768;
   const mcv = document.createElement('canvas');
   mcv.width = mw; mcv.height = mh;
   const mctx = mcv.getContext('2d');
   if (realistic) {
-    // ocean-blue background (will be hidden by the Google Maps iframe when
-    // the player zooms in — this is just what they see from across the room)
-    mctx.fillStyle = '#cfe1ef';
+    // ===== Modern minimalist atlas =====
+    // soft cream background (the "ocean" is left as the bg so the eye reads
+    // the green continents as figure, the ground as ground)
+    mctx.fillStyle = '#eef3f5';
     mctx.fillRect(0, 0, mw, mh);
-    // soft ocean grain
-    for (let i = 0; i < 1600; i++) {
-      mctx.fillStyle = `rgba(60, 110, 160, ${Math.random() * 0.08})`;
-      mctx.fillRect(Math.random() * mw, Math.random() * mh, 1.5, 1.5);
+
+    // helper: lon/lat → canvas px (equirectangular over full canvas)
+    function ll(lon, lat) {
+      return [(lon + 180) / 360 * mw, (90 - lat) / 180 * mh];
     }
-    // graticule
-    mctx.strokeStyle = 'rgba(40, 70, 110, 0.20)';
+
+    // faint graticule every 30° (uses ll for consistency)
+    mctx.strokeStyle = 'rgba(40, 60, 80, 0.10)';
     mctx.lineWidth = 1;
-    for (let x = 100; x < mw; x += 100) {
-      mctx.beginPath(); mctx.moveTo(x, 60); mctx.lineTo(x, mh - 60); mctx.stroke();
+    for (let lon = -150; lon <= 150; lon += 30) {
+      const [x] = ll(lon, 0);
+      mctx.beginPath(); mctx.moveTo(x, 0); mctx.lineTo(x, mh); mctx.stroke();
     }
-    for (let y = 100; y < mh; y += 100) {
-      mctx.beginPath(); mctx.moveTo(60, y); mctx.lineTo(mw - 60, y); mctx.stroke();
+    for (let lat = -60; lat <= 60; lat += 30) {
+      const [, y] = ll(0, lat);
+      mctx.beginPath(); mctx.moveTo(0, y); mctx.lineTo(mw, y); mctx.stroke();
     }
-    // more detailed continent shapes (eyeballed, equirectangular)
-    mctx.fillStyle = '#6f8f5a';
-    function shape(pts) {
+    // equator slightly darker
+    mctx.strokeStyle = 'rgba(40, 60, 80, 0.22)';
+    const [, eqY] = ll(0, 0);
+    mctx.beginPath(); mctx.moveTo(0, eqY); mctx.lineTo(mw, eqY); mctx.stroke();
+
+    // helper: draw a closed lon/lat polygon
+    function drawPolygon(latlonPts, fill, stroke) {
       mctx.beginPath();
-      mctx.moveTo(pts[0][0], pts[0][1]);
-      for (let i = 1; i < pts.length; i++) mctx.lineTo(pts[i][0], pts[i][1]);
+      for (let i = 0; i < latlonPts.length; i++) {
+        const [x, y] = ll(latlonPts[i][0], latlonPts[i][1]);
+        if (i === 0) mctx.moveTo(x, y);
+        else mctx.lineTo(x, y);
+      }
       mctx.closePath();
-      mctx.fill();
+      if (fill) { mctx.fillStyle = fill; mctx.fill(); }
+      if (stroke) {
+        mctx.strokeStyle = stroke;
+        mctx.lineWidth = 1;
+        mctx.stroke();
+      }
     }
-    // N. America (with Alaska stub + Florida tail)
-    shape([[140,180],[220,160],[280,170],[330,210],[360,260],[380,320],[360,390],[330,430],[290,460],[260,420],[230,400],[190,370],[160,320],[140,260]]);
-    shape([[60,200],[110,180],[130,220],[90,240]]);   // Alaska
-    // S. America
-    shape([[340,480],[400,470],[420,520],[430,600],[400,660],[360,680],[330,640],[320,580],[330,520]]);
-    // Europe (small)
-    shape([[600,210],[680,200],[720,220],[740,260],[700,290],[640,300],[610,270]]);
-    // Africa
-    shape([[620,310],[700,310],[740,360],[760,440],[740,520],[700,580],[660,610],[630,570],[610,500],[600,420],[610,360]]);
-    // Asia
-    shape([[720,180],[860,170],[980,180],[1080,210],[1140,260],[1120,320],[1040,360],[940,360],[840,340],[760,310],[720,260]]);
-    // SE Asia / Indonesia (a few small islands)
-    shape([[1000,410],[1080,400],[1100,440],[1040,460]]);
-    shape([[1080,470],[1140,470],[1140,500],[1090,500]]);
-    // Australia
-    shape([[1020,530],[1140,520],[1180,560],[1160,610],[1080,620],[1020,590]]);
+
+    const LAND_FILL   = '#9bbf86';
+    const LAND_STROKE = '#48584a';
+
+    // ----- Continent polygons (lon, lat) — eyeballed but reasonably faithful -----
+    // North America (Alaska + mainland + Mexico)
+    drawPolygon([
+      [-168, 65], [-166, 68], [-156, 71], [-141, 70], [-140, 60], [-135, 58],
+      [-130, 54], [-128, 52], [-124, 48], [-124, 42], [-122, 37], [-118, 33],
+      [-117, 32.5], [-114, 32], [-110, 30], [-108, 26], [-106, 23], [-105, 20],
+      [-100, 17], [-95, 16], [-92, 15], [-88, 16], [-87, 13], [-83, 9],
+      [-79, 8], [-78, 11], [-82, 14], [-87, 16], [-91, 19], [-91, 21],
+      [-87, 21], [-83, 23], [-82, 25], [-80, 25], [-80, 27], [-81, 31],
+      [-76, 35], [-75, 38], [-72, 41], [-67, 44], [-65, 46], [-60, 46],
+      [-56, 51], [-58, 54], [-62, 56], [-67, 55], [-71, 56], [-77, 56],
+      [-79, 62], [-87, 65], [-94, 68], [-105, 70], [-115, 73], [-125, 71],
+      [-130, 70], [-141, 70], [-152, 70], [-160, 68], [-168, 66]
+    ], LAND_FILL, LAND_STROKE);
+    // Hudson Bay (carve)
+    drawPolygon([
+      [-95, 62], [-82, 62], [-78, 58], [-78, 53], [-82, 51], [-92, 53], [-95, 57]
+    ], '#eef3f5', null);
     // Greenland
-    shape([[440,140],[500,130],[520,180],[470,210],[440,180]]);
-    // border + title
-    mctx.strokeStyle = '#1f2a3a';
-    mctx.lineWidth = 7;
-    mctx.strokeRect(46, 46, mw - 92, mh - 92);
-    mctx.fillStyle = '#1f2a3a';
-    mctx.font = '300 38px "Cormorant Garamond", serif';
-    mctx.textAlign = 'center';
-    mctx.fillText('the real world', mw / 2, 100);
-    mctx.font = '14px serif';
-    mctx.fillText('press e to explore', mw / 2, mh - 70);
+    drawPolygon([
+      [-55, 83], [-30, 84], [-22, 80], [-22, 70], [-30, 60], [-42, 59],
+      [-50, 62], [-55, 70], [-58, 76]
+    ], LAND_FILL, LAND_STROKE);
+    // Baffin / Ellesmere (rough single blob)
+    drawPolygon([
+      [-86, 76], [-78, 79], [-67, 81], [-62, 76], [-66, 70], [-78, 67], [-84, 70]
+    ], LAND_FILL, LAND_STROKE);
+
+    // South America
+    drawPolygon([
+      [-76, 11], [-72, 11], [-66, 11], [-60, 8], [-52, 5], [-50, 0],
+      [-46, -2], [-38, -8], [-35, -10], [-37, -16], [-39, -22], [-43, -24],
+      [-48, -28], [-54, -34], [-58, -38], [-62, -41], [-66, -45], [-70, -50],
+      [-72, -54], [-68, -55], [-65, -52], [-66, -47], [-69, -43], [-71, -38],
+      [-72, -32], [-71, -28], [-71, -22], [-72, -16], [-77, -12], [-80, -6],
+      [-80, -2], [-78, 1], [-78, 6], [-76, 9]
+    ], LAND_FILL, LAND_STROKE);
+
+    // Iceland
+    drawPolygon([
+      [-24, 64], [-14, 64], [-13, 66], [-21, 67], [-24, 66]
+    ], LAND_FILL, LAND_STROKE);
+
+    // Europe (mainland) + British Isles + Scandinavia
+    drawPolygon([
+      [-10, 36], [-6, 36], [-3, 35], [0, 36], [5, 38], [10, 38], [13, 38],
+      [16, 41], [20, 40], [24, 40], [27, 38], [29, 41], [33, 45], [36, 45],
+      [40, 48], [42, 53], [40, 60], [33, 64], [27, 66], [20, 68], [16, 69],
+      [10, 64], [12, 62], [10, 58], [4, 58], [8, 55], [9, 53], [6, 51],
+      [3, 51], [-2, 49], [-5, 48], [-4, 44], [-9, 43], [-9, 40], [-7, 37]
+    ], LAND_FILL, LAND_STROKE);
+    // Italy peninsula
+    drawPolygon([
+      [10, 46], [14, 45], [17, 41], [18, 40], [15, 38], [11, 43]
+    ], LAND_FILL, LAND_STROKE);
+    // Britain
+    drawPolygon([
+      [-5, 50], [-3, 51], [1, 51], [2, 53], [0, 55], [-3, 58], [-5, 57], [-6, 55], [-5, 52]
+    ], LAND_FILL, LAND_STROKE);
+    // Ireland
+    drawPolygon([
+      [-10, 52], [-6, 51], [-6, 55], [-10, 55]
+    ], LAND_FILL, LAND_STROKE);
+
+    // Africa
+    drawPolygon([
+      [-17, 21], [-12, 28], [-6, 35], [0, 36], [10, 35], [20, 32], [25, 31],
+      [33, 31], [34, 28], [37, 22], [39, 17], [43, 12], [48, 12], [51, 11],
+      [49, 4], [45, 0], [42, -5], [39, -8], [40, -16], [40, -25], [33, -28],
+      [27, -33], [22, -34], [18, -34], [15, -28], [12, -18], [13, -12], [9, -5],
+      [9, 4], [2, 6], [-5, 5], [-8, 4], [-13, 9], [-17, 14]
+    ], LAND_FILL, LAND_STROKE);
+    // Madagascar
+    drawPolygon([
+      [43, -12], [50, -16], [50, -22], [46, -25], [44, -22], [43, -16]
+    ], LAND_FILL, LAND_STROKE);
+
+    // Asia (mainland — vast polygon)
+    drawPolygon([
+      [26, 38], [29, 41], [33, 45], [38, 47], [42, 48], [48, 52], [55, 55],
+      [60, 60], [65, 66], [70, 68], [80, 72], [95, 78], [105, 78], [115, 75],
+      [125, 73], [135, 71], [142, 70], [150, 68], [160, 66], [170, 68],
+      [175, 65], [180, 65], [180, 60], [170, 60], [165, 58], [160, 60],
+      [155, 56], [142, 53], [140, 47], [135, 43], [130, 42], [127, 38],
+      [125, 38], [122, 39], [120, 37], [122, 32], [118, 30], [110, 22],
+      [108, 19], [105, 14], [108, 11], [108, 5], [103, 2], [100, 6], [97, 11],
+      [95, 16], [94, 22], [88, 22], [85, 25], [80, 22], [77, 22], [73, 24],
+      [70, 22], [68, 24], [64, 25], [60, 25], [56, 25], [50, 24], [44, 22],
+      [44, 13], [45, 12], [49, 12], [51, 11], [55, 13], [57, 22], [55, 27],
+      [48, 30], [45, 38], [40, 40], [36, 36], [32, 36], [29, 38]
+    ], LAND_FILL, LAND_STROKE);
+    // Indian peninsula
+    drawPolygon([
+      [70, 22], [72, 22], [78, 21], [80, 15], [78, 8], [76, 9], [73, 15], [72, 20]
+    ], LAND_FILL, LAND_STROKE);
+    // Japan
+    drawPolygon([[140, 45], [144, 43], [141, 39], [136, 35], [132, 34], [130, 32], [131, 31], [135, 33], [138, 35], [141, 38]], LAND_FILL, LAND_STROKE);
+    // Sri Lanka
+    drawPolygon([[80, 9], [82, 8], [82, 6], [80, 6]], LAND_FILL, LAND_STROKE);
+
+    // SE Asian islands — Indonesia, Borneo, Sumatra, New Guinea
+    drawPolygon([[95, 6], [98, 4], [102, 1], [106, -3], [105, -6], [100, -2], [96, 3]], LAND_FILL, LAND_STROKE); // Sumatra
+    drawPolygon([[108, 1], [114, 1], [118, 0], [118, -3], [114, -4], [110, -3], [108, -1]], LAND_FILL, LAND_STROKE); // Borneo
+    drawPolygon([[122, 0], [125, 1], [124, -2], [121, -5], [119, -3]], LAND_FILL, LAND_STROKE); // Sulawesi
+    drawPolygon([[131, -2], [140, -3], [150, -7], [151, -10], [141, -9], [134, -8], [131, -5]], LAND_FILL, LAND_STROKE); // New Guinea
+    drawPolygon([[120, -8], [125, -8], [128, -9], [122, -9]], LAND_FILL, LAND_STROKE); // Lesser Sundas
+    drawPolygon([[107, -6], [114, -8], [110, -8]], LAND_FILL, LAND_STROKE); // Java
+    drawPolygon([[120, 7], [122, 9], [125, 14], [124, 18], [121, 18], [120, 15], [119, 12], [120, 9]], LAND_FILL, LAND_STROKE); // Philippines (rough)
+
+    // Australia
+    drawPolygon([
+      [113, -22], [114, -26], [115, -32], [118, -34], [123, -34], [129, -32],
+      [132, -32], [137, -34], [140, -38], [144, -39], [146, -39], [150, -37],
+      [152, -32], [153, -28], [153, -25], [146, -19], [142, -14], [139, -17],
+      [135, -15], [130, -12], [126, -14], [122, -17], [117, -20]
+    ], LAND_FILL, LAND_STROKE);
+    // Tasmania
+    drawPolygon([[145, -41], [148, -41], [148, -43], [145, -43]], LAND_FILL, LAND_STROKE);
+    // New Zealand
+    drawPolygon([[172, -41], [174, -41], [176, -39], [177, -38], [174, -36], [172, -37]], LAND_FILL, LAND_STROKE); // North Island
+    drawPolygon([[166, -47], [171, -47], [174, -42], [172, -41], [168, -43]], LAND_FILL, LAND_STROKE); // South Island
+
+    // Antarctica strip (decorative)
+    drawPolygon([
+      [-180, -65], [-90, -68], [0, -66], [90, -68], [180, -65],
+      [180, -90], [-180, -90]
+    ], LAND_FILL, LAND_STROKE);
+
+    // Subtle inland water / interest accents — just a few rivers / lakes as
+    // a hint of detail (Caspian, Great Lakes are visible at this zoom).
+    drawPolygon([[48, 47], [54, 47], [54, 38], [49, 37], [48, 42]], '#cfdde5', '#7a8d9b'); // Caspian
+    drawPolygon([[-92, 47], [-83, 48], [-77, 45], [-83, 43], [-90, 44]], '#cfdde5', '#7a8d9b'); // Great Lakes blob
+
+    // Title bar across the top, modern minimalist
+    mctx.fillStyle = '#1b2a32';
+    mctx.font = '600 36px "Inter", system-ui, sans-serif';
+    mctx.textAlign = 'left';
+    mctx.fillText('biotech world', 40, 50);
+    mctx.font = '300 18px "Inter", system-ui, sans-serif';
+    mctx.fillStyle = '#42525a';
+    mctx.fillText('top 20 biopharma headquarters by market capitalisation', 40, 76);
+    mctx.font = '300 13px "Inter", system-ui, sans-serif';
+    mctx.fillStyle = '#7a8a90';
+    mctx.textAlign = 'right';
+    mctx.fillText('hover a pin to read the city — click to see the company', mw - 40, mh - 24);
   } else {
     // aged paper background
     mctx.fillStyle = '#f5e8c0';
@@ -3740,34 +3981,118 @@ function buildCorkBoardWithMap(opts = {}) {
   g.userData.mapMesh = map;
   g.userData.realistic = realistic;
 
-  // ---- four red push pins at the corners of the map ----
+  // ---- red push pins ----
+  // Stylised board (non-realistic): four decorative corner pins.
+  // Realistic board: one pin per top-20 biopharma HQ, raycastable for
+  // hover/click interactions in the front-view zoom.
   const pinHeadMat = new THREE.MeshStandardMaterial({
     color: 0xd03030, roughness: 0.4, metalness: 0.35, emissive: 0x401010, emissiveIntensity: 0.2,
   });
   const pinShaftMat = new THREE.MeshStandardMaterial({
     color: 0x4a4a4a, roughness: 0.3, metalness: 0.85,
   });
-  const pinInset = 0.06;
-  const pinCorners = [
-    [-MW / 2 + pinInset,  MH / 2 - pinInset],
-    [ MW / 2 - pinInset,  MH / 2 - pinInset],
-    [-MW / 2 + pinInset, -MH / 2 + pinInset],
-    [ MW / 2 - pinInset, -MH / 2 + pinInset],
-  ];
-  for (const [px, py] of pinCorners) {
-    const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.009, 0.009, 0.030, 8), pinShaftMat
-    );
-    // align shaft along Z (cork normal)
-    shaft.rotation.x = Math.PI / 2;
-    shaft.position.set(px, PANEL_Y + py, BD / 2 + 0.015);
-    g.add(shaft);
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.028, 14, 12), pinHeadMat
-    );
-    head.position.set(px, PANEL_Y + py, BD / 2 + 0.040);
-    head.castShadow = true;
-    g.add(head);
+
+  if (!realistic) {
+    const pinInset = 0.06;
+    const pinCorners = [
+      [-MW / 2 + pinInset,  MH / 2 - pinInset],
+      [ MW / 2 - pinInset,  MH / 2 - pinInset],
+      [-MW / 2 + pinInset, -MH / 2 + pinInset],
+      [ MW / 2 - pinInset, -MH / 2 + pinInset],
+    ];
+    for (const [px, py] of pinCorners) {
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.009, 0.009, 0.030, 8), pinShaftMat
+      );
+      shaft.rotation.x = Math.PI / 2;
+      shaft.position.set(px, PANEL_Y + py, BD / 2 + 0.015);
+      g.add(shaft);
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.028, 14, 12), pinHeadMat
+      );
+      head.position.set(px, PANEL_Y + py, BD / 2 + 0.040);
+      head.castShadow = true;
+      g.add(head);
+    }
+  } else {
+    // Top-20 biopharma by market capitalisation (2024-2026 ballpark).
+    // dx / dy are local-space nudges for cities that house more than one
+    // headquarters (NYC, Cambridge MA, Basel) so the pins don't overlap.
+    const COMPANIES = [
+      { name: 'Eli Lilly', city: 'Indianapolis, USA', lat: 39.77, lon: -86.16,
+        desc: "American pharma giant — currently the world's most valuable drugmaker. Built around blockbuster GLP-1 medicines for diabetes and obesity (Mounjaro, Zepbound, Trulicity). Founded 1876 in Indianapolis, where it still produces a major share of the world's insulin supply." },
+      { name: 'Novo Nordisk', city: 'Bagsværd, Denmark', lat: 55.76, lon: 12.46,
+        desc: "Danish company that became Europe's most valuable through its GLP-1 franchise — Ozempic for type-2 diabetes and Wegovy for obesity — and that quietly supplies roughly half of the world's insulin from a campus just outside Copenhagen." },
+      { name: 'Johnson & Johnson', city: 'New Brunswick, USA', lat: 40.49, lon: -74.45,
+        desc: "A 137-year-old healthcare conglomerate. The pharmaceutical arm (Janssen) sells Stelara, Darzalex and Tremfya, alongside large medtech and consumer-health businesses. Its credo-driven New Brunswick HQ has been a fixture since 1886." },
+      { name: 'Roche', city: 'Basel, Switzerland', lat: 47.56, lon: 7.59,
+        desc: "Swiss group dominating oncology and in-vitro diagnostics. Its subsidiary Genentech (South SF) created the modern antibody-drug pillar — Herceptin, Avastin, Rituxan — and Roche also owns the world's largest diagnostic-testing business." },
+      { name: 'AbbVie', city: 'North Chicago, USA', lat: 42.32, lon: -87.84,
+        desc: "Spun out of Abbott in 2013 around Humira — once the world's best-selling drug. Today a major immunology, oncology and aesthetics player (Skyrizi, Rinvoq, Botox) headquartered north of Chicago." },
+      { name: 'AstraZeneca', city: 'Cambridge, UK', lat: 52.20, lon: 0.13,
+        desc: "Anglo-Swedish company anchored at the Cambridge Biomedical Campus. Powerhouse oncology portfolio (Tagrisso, Imfinzi, Enhertu) and the co-developer with Oxford of one of the first COVID-19 vaccines." },
+      { name: 'Merck & Co', city: 'Rahway, USA', lat: 40.61, lon: -74.28,
+        desc: "American firm built around Keytruda, the world's top-selling cancer immunotherapy. Also a leader in vaccines (Gardasil, Pneumovax), animal health and HIV. Known as MSD outside the US and Canada." },
+      { name: 'Pfizer', city: 'New York City, USA', lat: 40.71, lon: -74.01,
+        desc: "New York-headquartered company best known to the public for the Comirnaty mRNA COVID-19 vaccine (with BioNTech) and the antiviral Paxlovid. Broad portfolio across oncology, vaccines, internal medicine and rare disease." },
+      { name: 'Novartis', city: 'Basel, Switzerland', lat: 47.56, lon: 7.59, dx: 0.04, dy: 0,
+        desc: "Swiss group, across the Rhine from Roche. After spinning out Sandoz generics in 2023 it focuses on innovative medicines: Entresto for heart failure, Cosentyx in immunology, and the CAR-T cell therapy Kymriah." },
+      { name: 'Amgen', city: 'Thousand Oaks, USA', lat: 34.17, lon: -118.84,
+        desc: "Pioneering biotech founded 1980 in suburban Los Angeles. Proved recombinant protein drugs could be a real industry with Epogen and Neupogen; today known for Repatha, Otezla, Prolia and tezepelumab (with AstraZeneca)." },
+      { name: 'Sanofi', city: 'Paris, France', lat: 48.86, lon: 2.35,
+        desc: "French multinational with a strong vaccines arm (Sanofi Pasteur) and Dupixent — the world's best-selling drug for atopic dermatitis and asthma — co-developed with Regeneron. Headquartered in Paris." },
+      { name: 'Bristol Myers Squibb', city: 'New York City, USA', lat: 40.71, lon: -74.01, dx: -0.03, dy: -0.04,
+        desc: "New York company built around the immuno-oncology drug Opdivo and the blood-thinner Eliquis. The $74B Celgene merger added Revlimid, Pomalyst and Reblozyl, plus the CAR-T platform behind Breyanzi and Abecma." },
+      { name: 'Gilead Sciences', city: 'Foster City, USA', lat: 37.56, lon: -122.27,
+        desc: "Bay-Area biotech that effectively cured hepatitis C with Sovaldi and Harvoni, and has long led HIV care (Biktarvy, Descovy, Truvada). Recently expanded into oncology via the Immunomedics acquisition." },
+      { name: 'Vertex Pharmaceuticals', city: 'Boston, USA', lat: 42.36, lon: -71.05,
+        desc: "Boston biotech that essentially owns the cystic-fibrosis franchise with Trikafta — turning a fatal disease into a manageable one. In 2023 it launched Casgevy, the first CRISPR-edited cell therapy to reach the market (with CRISPR Therapeutics)." },
+      { name: 'Regeneron', city: 'Tarrytown, USA', lat: 41.07, lon: -73.86,
+        desc: "Hudson-Valley company anchored by Eylea (macular degeneration) and Dupixent (with Sanofi). Built one of biotech's most productive antibody-engineering platforms around its VelocImmune transgenic mice." },
+      { name: 'Moderna', city: 'Cambridge MA, USA', lat: 42.37, lon: -71.10,
+        desc: "Cambridge biotech that mass-produced the first mRNA vaccine to reach authorisation during COVID-19. Pipeline today spans flu, RSV, latent viruses (CMV, EBV) and personalised cancer vaccines, all on the same mRNA platform." },
+      { name: 'Biogen', city: 'Cambridge MA, USA', lat: 42.37, lon: -71.10, dx: 0.04, dy: 0,
+        desc: "One of biotech's oldest companies, founded 1978. Pioneer in multiple sclerosis therapy (Tysabri, Tecfidera) and home to the controversial Alzheimer's antibodies Aduhelm and Leqembi (the latter co-developed with Eisai)." },
+      { name: 'BioNTech', city: 'Mainz, Germany', lat: 49.99, lon: 8.27,
+        desc: "Mainz biotech founded by Uğur Şahin and Özlem Türeci to develop mRNA cancer vaccines. Partnered with Pfizer to bring the first COVID-19 vaccine to market in under a year; the cancer programs remain its long-term focus." },
+      { name: 'CSL Limited', city: 'Melbourne, Australia', lat: -37.81, lon: 144.96,
+        desc: "Australian biopharma that began as the Commonwealth Serum Laboratories in 1916. Today the world's largest plasma-products company (immunoglobulins, albumin, clotting factors) and home to the flu-vaccine business CSL Seqirus." },
+      { name: 'GSK', city: 'London, UK', lat: 51.51, lon: -0.13,
+        desc: "British company headquartered in west London. A vaccines leader (Shingrix for shingles, Arexvy for RSV) and active in HIV through its ViiV Healthcare joint venture; restructured around specialty medicines after spinning out consumer health as Haleon." },
+    ];
+
+    const HEAD_R   = 0.022;
+    const SHAFT_L  = 0.026;
+    const SHAFT_R  = 0.006;
+
+    const companyPins = [];
+    for (let i = 0; i < COMPANIES.length; i++) {
+      const c = COMPANIES[i];
+      // equirectangular lon/lat → local map plane coordinates
+      const lx = (c.lon / 360) * MW + (c.dx || 0);
+      const ly = (c.lat / 180) * MH + (c.dy || 0);
+
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(SHAFT_R, SHAFT_R, SHAFT_L, 8), pinShaftMat
+      );
+      shaft.rotation.x = Math.PI / 2;
+      shaft.position.set(lx, PANEL_Y + ly, BD / 2 + SHAFT_L / 2);
+      g.add(shaft);
+
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(HEAD_R, 14, 12), pinHeadMat
+      );
+      head.position.set(lx, PANEL_Y + ly, BD / 2 + SHAFT_L);
+      head.castShadow = true;
+      // tag the head for raycast lookup
+      head.userData.companyIdx = i;
+      head.userData.isCompanyPin = true;
+      g.add(head);
+
+      companyPins.push({ company: c, head, shaft });
+    }
+    g.userData.companies = COMPANIES;
+    g.userData.companyPins = companyPins;
   }
 
   return g;
@@ -4340,8 +4665,8 @@ function buildProjectsScene() {
   // shared face/side vectors (boards face +face direction, lined up along +side)
   const faceX = Math.sin(BOARD_ANGLE), faceZ = Math.cos(BOARD_ANGLE);
   const sideX = Math.cos(BOARD_ANGLE), sideZ = -Math.sin(BOARD_ANGLE);
-  // Pair centre — kept roughly where the original board sat.
-  const PAIR_CX = -6.6, PAIR_CZ = -0.4;
+  // Pair centre — shifted 3m further west from the original board location.
+  const PAIR_CX = -9.6, PAIR_CZ = -0.4;
   const halfOffset = BW / 2;             // boards touch frame-to-frame
   corkBoardA.position.set(PAIR_CX - sideX * halfOffset, 0, PAIR_CZ - sideZ * halfOffset);
   corkBoardA.rotation.y = BOARD_ANGLE;
@@ -4367,6 +4692,9 @@ function buildProjectsScene() {
       sideDir: new THREE.Vector3(sideX, 0, sideZ),
       standPos,
       mapCentre,
+      // biotech-pin metadata (only present on the realistic board)
+      companies: b.userData.companies || [],
+      pins: b.userData.companyPins || [],
     };
   });
 
@@ -4599,120 +4927,22 @@ html { scroll-behavior: smooth; }
       try { unstickProjectsBaymax(projectsWorld.baymax); } catch (_) {}
       restoreParentFocus();
     }
-    if (projectsWorld.boardActive) {
-      projectsWorld.boardActive = false;
-      try { unstickProjectsBaymax(projectsWorld.baymax); } catch (_) {}
-      restoreParentFocus();
-    }
   });
 
-  // ---- Realistic-map iframe (CSS3D) on the second cork board ----
-  // Wrapped in a same-origin srcdoc so the parent can scroll/zoom Google Maps
-  // (which is itself cross-origin).  Click anywhere → opens Google Maps in a
-  // new tab.  E or ESC → close board view.
-  const GMAPS_URL = 'https://www.google.com/maps?ll=20,0&z=2&t=m&output=embed';
-  const GMAPS_OPEN_URL = 'https://www.google.com/maps/@20,0,3z';
-  const mapsWrapperHTML = `<!doctype html>
-<html><head><meta charset="utf-8"><style>
-html, body { margin:0; padding:0; background:#eef3f7; cursor:pointer; height:100%; }
-.frame { display:block; width:100%; height:100%; border:0; }
-.banner {
-  position: fixed; bottom: 10px; right: 10px;
-  background: rgba(20,20,20,0.78); color: #fff;
-  font: 12px/1.2 -apple-system, BlinkMacSystemFont, sans-serif;
-  padding: 6px 10px; border-radius: 999px;
-  pointer-events: none;
-}
-</style></head><body tabindex="-1">
-<iframe class="frame" src="${GMAPS_URL}" referrerpolicy="no-referrer"></iframe>
-<div class="banner">click to open ↗</div>
-<script>
-  document.addEventListener('click', function(e){
-    if (e.target && e.target.tagName === 'IFRAME') return;
-    window.open('${GMAPS_OPEN_URL}', '_blank', 'noopener');
-  });
-  document.addEventListener('keydown', function(e){
-    var k = (e.key || '').toLowerCase();
-    if (k === 'e' || k === 'escape') {
-      e.preventDefault();
-      try { window.parent.__noahCloseBoard && window.parent.__noahCloseBoard(); } catch (_) {}
-    }
-  });
-<\/script>
-</body></html>`;
-
-  const mapsIframe = document.createElement('iframe');
-  mapsIframe.srcdoc = mapsWrapperHTML;
-  // pixel dimensions chosen to roughly match the map-plane aspect (MW:MH ≈ 2.205)
-  mapsIframe.style.width = '1280px';
-  mapsIframe.style.height = '580px';
-  mapsIframe.style.border = '0';
-  mapsIframe.style.background = '#eef3f7';
-  mapsIframe.style.pointerEvents = 'none';
-  mapsIframe.setAttribute('tabindex', '0');
-  // Position the CSS3D iframe flush with the realistic board's map plane.
-  const realisticBoardData = projectsWorld.boards.find(b => b.realistic);
-  const boardPanelY = realisticBoardData.group.userData.PANEL_Y;
-  const boardBD     = realisticBoardData.group.userData.BD;
-  const boardMW     = realisticBoardData.group.userData.MW;
-  const boardMH     = realisticBoardData.group.userData.MH;
-  const boardAngle  = realisticBoardData.group.rotation.y;
-  const boardFaceX  = Math.sin(boardAngle);
-  const boardFaceZ  = Math.cos(boardAngle);
-  const mapsCssObj = new CSS3DObject(mapsIframe);
-  const msx = boardMW / 1280;
-  const msy = boardMH / 580;
-  mapsCssObj.scale.set(msx, msy, msx);
-  mapsCssObj.position.set(
-    realisticBoardData.x + (boardBD / 2 + 0.006) * boardFaceX,
-    boardPanelY,
-    realisticBoardData.z + (boardBD / 2 + 0.006) * boardFaceZ
-  );
-  mapsCssObj.rotation.y = boardAngle;
-  mapsCssObj.visible = false;
-  projectsWorld.scene.add(mapsCssObj);
-  projectsWorld.mapsIframe = mapsIframe;
-  projectsWorld.mapsCssObj = mapsCssObj;
-
-  // Close board view (called from inside the maps srcdoc and the capture-phase
-  // window keydown listener below).
-  function exitBoardFromIframe() {
-    if (projectsWorld.boardActive) {
-      projectsWorld.boardActive = false;
-      try { unstickProjectsBaymax(projectsWorld.baymax); } catch (_) {}
-      restoreParentFocus();
-    }
-  }
-  window.__noahCloseBoard = exitBoardFromIframe;
+  // Capture-phase window keydown listener for closing the board view (E / ESC).
+  // The realistic board now renders an inline atlas (no iframe), so this is
+  // the only path needed to exit board view.
   window.addEventListener('keydown', (e) => {
     if (!projectsWorld || !projectsWorld.boardActive) return;
     const k = (e.key || '').toLowerCase();
     if (k === 'e' || k === 'escape') {
       e.preventDefault();
-      exitBoardFromIframe();
+      projectsWorld.boardActive = false;
+      if (projectsWorld.closeBoardCard) projectsWorld.closeBoardCard();
+      try { unstickProjectsBaymax(projectsWorld.baymax); } catch (_) {}
+      restoreParentFocus();
     }
   }, true);
-  mapsIframe.addEventListener('load', () => {
-    try {
-      const innerWin = mapsIframe.contentWindow;
-      if (innerWin && innerWin.addEventListener) {
-        innerWin.addEventListener('keydown', e => {
-          const k = (e.key || '').toLowerCase();
-          if (k === 'e' || k === 'escape') {
-            e.preventDefault();
-            exitBoardFromIframe();
-          }
-        });
-      }
-    } catch (e) { /* cross-origin — focus-sink fallback handles it */ }
-  });
-  mapsIframe.addEventListener('mouseleave', () => {
-    if (projectsWorld.boardActive) {
-      try { mapsIframe.blur(); } catch (_) {}
-      try { focusSink?.focus({ preventScroll: true }); } catch (_) {}
-    }
-  });
-  projectsWorld.exitBoardFromIframe = exitBoardFromIframe;
 
   // "click to open" pill — visible only while in the computer view, styled
   // to match the intro tap-to-begin button.  Click → open paattikiiltoon.fi
@@ -4869,6 +5099,120 @@ html, body { margin:0; padding:0; background:#eef3f7; cursor:pointer; height:100
   // make sure we start with the keyboard pointed at the body, not at any
   // element a browser auto-focused
   try { focusSink?.focus({ preventScroll: true }); } catch (_) {}
+
+  // ---- Biotech-pin hover + click handling on the realistic cork board ----
+  const bpEl       = document.getElementById('biopharma-overlay');
+  const bpTitleEl  = bpEl.querySelector('.bp-title');
+  const bpDescEl   = bpEl.querySelector('.bp-desc');
+  const bpCloseBtn = bpEl.querySelector('.bp-close');
+  const _pinRaycaster = new THREE.Raycaster();
+  const _pinNDC       = new THREE.Vector2();
+  let _bpActiveIdx    = -1;        // open-card company index (or -1)
+  let _bpHoverIdx     = -1;        // hover tooltip company index (or -1)
+
+  function _bpClose() {
+    bpEl.classList.remove('as-card');
+    bpEl.classList.remove('as-tooltip');
+    _bpActiveIdx = -1;
+    _bpHoverIdx  = -1;
+    document.body.style.cursor = '';
+  }
+  // expose so the board-exit paths can dismiss the card
+  projectsWorld.closeBoardCard = _bpClose;
+
+  function _bpPinAt(clientX, clientY) {
+    if (!projectsWorld.boardActive) return null;
+    const board = projectsWorld.activeBoard;
+    if (!board || !board.realistic || !board.pins || !board.pins.length) return null;
+    _pinNDC.x = (clientX / window.innerWidth)  * 2 - 1;
+    _pinNDC.y = -(clientY / window.innerHeight) * 2 + 1;
+    _pinRaycaster.setFromCamera(_pinNDC, projectsWorld.camera);
+    const heads = board.pins.map(p => p.head);
+    const hits  = _pinRaycaster.intersectObjects(heads, false);
+    if (!hits.length) return null;
+    const head = hits[0].object;
+    const idx  = head.userData.companyIdx;
+    return { idx, head, company: board.companies[idx] };
+  }
+
+  function _bpPositionCard(headMesh) {
+    // Anchor the card near the pin's screen-space position, then nudge
+    // (via left/top) to keep it inside the viewport.
+    const headWorld = new THREE.Vector3();
+    headMesh.getWorldPosition(headWorld);
+    const ndc = headWorld.clone().project(projectsWorld.camera);
+    const sx  = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+    const sy  = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+    // approximate card dimensions (hard-coded to match the .as-card CSS) —
+    // avoids the size-mid-transition trap of getBoundingClientRect()
+    const cw  = 340;
+    const ch  = 240;
+    const gap = 18;
+    // prefer to the right of the pin, fall back to left if it would clip
+    let left = sx + gap;
+    if (left + cw > window.innerWidth - 12) left = sx - gap - cw;
+    if (left < 12) left = 12;
+    // anchor so the title sits a bit above the pin (gives the "moves up" feel)
+    let top = sy - ch * 0.65;
+    if (top < 12) top = 12;
+    if (top + ch > window.innerHeight - 12) top = window.innerHeight - 12 - ch;
+    bpEl.style.left = `${left}px`;
+    bpEl.style.top  = `${top}px`;
+    bpEl.style.transform = '';
+  }
+
+  window.addEventListener('pointermove', (ev) => {
+    // While a card is open, don't react to hover (keeps the title still).
+    if (_bpActiveIdx !== -1) return;
+    if (!projectsWorld.boardActive) {
+      if (_bpHoverIdx !== -1) { bpEl.classList.remove('as-tooltip'); _bpHoverIdx = -1; }
+      return;
+    }
+    const hit = _bpPinAt(ev.clientX, ev.clientY);
+    if (hit) {
+      bpTitleEl.textContent = `${hit.company.name}, ${hit.company.city}`;
+      bpDescEl.textContent  = '';
+      bpEl.classList.remove('as-card');
+      bpEl.classList.add('as-tooltip');
+      bpEl.style.left = `${ev.clientX}px`;
+      bpEl.style.top  = `${ev.clientY}px`;
+      bpEl.style.transform = '';
+      _bpHoverIdx = hit.idx;
+      document.body.style.cursor = 'pointer';
+    } else if (_bpHoverIdx !== -1) {
+      bpEl.classList.remove('as-tooltip');
+      _bpHoverIdx = -1;
+      document.body.style.cursor = '';
+    }
+  });
+
+  // Click → open the card.  Clicks inside the card itself bubble through to
+  // their own handlers (close button); clicks elsewhere on the page close it.
+  window.addEventListener('click', (ev) => {
+    if (bpEl.contains(ev.target)) return;   // clicks inside card handled below
+    if (!projectsWorld.boardActive) {
+      if (_bpActiveIdx !== -1) _bpClose();
+      return;
+    }
+    const hit = _bpPinAt(ev.clientX, ev.clientY);
+    if (hit) {
+      bpTitleEl.textContent = `${hit.company.name}, ${hit.company.city}`;
+      bpDescEl.textContent  = hit.company.desc;
+      bpEl.classList.remove('as-tooltip');
+      bpEl.classList.add('as-card');
+      _bpActiveIdx = hit.idx;
+      // run after the next layout pass so the card has its full size
+      requestAnimationFrame(() => _bpPositionCard(hit.head));
+    } else if (_bpActiveIdx !== -1) {
+      _bpClose();
+    }
+  });
+
+  // Close-button on the card
+  bpCloseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _bpClose();
+  });
 
   // ---- Whack-a-mole score overlay ----
   const gameScoreEl = document.createElement('div');
@@ -5048,8 +5392,7 @@ html, body { margin:0; padding:0; background:#eef3f7; cursor:pointer; height:100
       projectsWorld.bookActive = false;
       projectsWorld.boxActive = false;
       projectsWorld.boardActive = false;
-      if (projectsWorld.mapsCssObj) projectsWorld.mapsCssObj.visible = false;
-      if (projectsWorld.mapsIframe) projectsWorld.mapsIframe.style.pointerEvents = 'none';
+      if (projectsWorld.closeBoardCard) projectsWorld.closeBoardCard();
       // also restore any open crate
       if (projectsWorld.crates) {
         for (const crate of projectsWorld.crates) {
@@ -5961,7 +6304,7 @@ html, body { margin:0; padding:0; background:#eef3f7; cursor:pointer; height:100
   // Walk-in from the RIGHT, controllable inside screen bounds, walking back
   // across the RIGHT edge returns him to cobble.  Plus collision with the
   // workbench / crates and a "click e" proximity action on the laptop.
-  const PROJECTS_BOUNDS = { minX: -8.5, maxX: 8.5, minZ: -5.0, maxZ: 5.0 };
+  const PROJECTS_BOUNDS = { minX: -11.0, maxX: 8.5, minZ: -5.0, maxZ: 5.0 };
   // Inflated rectangles so baymax's body doesn't clip through the props
   const PROJECTS_OBSTACLES = [
     // workbench (5.0 wide × 1.4 deep, centred at (0, _, -3.5)) + body buffer
@@ -6413,21 +6756,13 @@ html, body { margin:0; padding:0; background:#eef3f7; cursor:pointer; height:100
       projectsWorld.camera.position.copy(projectsWorld.camPos);
       projectsWorld.camera.lookAt(projectsWorld.camLook);
 
-      // For the realistic board: hide its painted map and show the Google
-      // Maps iframe in its place; let the user click + drag inside the map.
-      if (board.realistic) {
-        const mapMesh = board.group.userData.mapMesh;
-        if (mapMesh) mapMesh.visible = false;
-        if (projectsWorld.mapsCssObj) projectsWorld.mapsCssObj.visible = true;
-        if (projectsWorld.mapsIframe) projectsWorld.mapsIframe.style.pointerEvents = 'auto';
-      }
-
       projectsPromptEl.style.display = 'none';
 
       // press E or ESC to exit (auto-repeat-guarded by eHeld)
       if (keys['e'] || keys['escape']) {
         if (!projectsWorld.eHeld) {
           projectsWorld.boardActive = false;
+          if (projectsWorld.closeBoardCard) projectsWorld.closeBoardCard();
           unstickProjectsBaymax(b);
           restoreParentFocus();
         }
@@ -6436,16 +6771,6 @@ html, body { margin:0; padding:0; background:#eef3f7; cursor:pointer; height:100
         projectsWorld.eHeld = false;
       }
       return;
-    } else {
-      // not in board view — hide iframe and restore the realistic painted map
-      if (projectsWorld.mapsCssObj) projectsWorld.mapsCssObj.visible = false;
-      if (projectsWorld.mapsIframe) projectsWorld.mapsIframe.style.pointerEvents = 'none';
-      if (projectsWorld.boards) {
-        for (const board of projectsWorld.boards) {
-          const mapMesh = board.group.userData.mapMesh;
-          if (mapMesh && !mapMesh.visible) mapMesh.visible = true;
-        }
-      }
     }
 
     // smoothly return camera to the standard top-down view if it had moved
