@@ -3526,10 +3526,11 @@ function buildCaveScene() {
 // Scene 8 — PROJECTS (entered through the "projects" exit, left edge of cobble)
 // ==========================================================================
 
-function buildCorkBoardWithMap() {
+function buildCorkBoardWithMap(opts = {}) {
   // Standing cork board with metal frame + legs, holding a stylised world
   // map pinned at the four corners.  Returned as a group centred at the
   // floor, ready to be positioned + rotated by the caller.
+  const realistic = opts.realistic === true;
   const g = new THREE.Group();
 
   // ---- cork texture canvas ----
@@ -3555,7 +3556,7 @@ function buildCorkBoardWithMap() {
   const corkMat = new THREE.MeshStandardMaterial({ map: corkTex, roughness: 0.95 });
 
   // ---- panel + mounting height ----
-  const BW = 2.0, BH = 1.6, BD = 0.04;
+  const BW = 3.2, BH = 1.6, BD = 0.04;
   const PANEL_Y = 1.55;                              // panel centre
   const panel = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BD), corkMat);
   panel.position.y = PANEL_Y;
@@ -3587,7 +3588,7 @@ function buildCorkBoardWithMap() {
 
   // ---- metal legs (a pair of straight verticals with feet and a diagonal brace) ----
   const legMat = new THREE.MeshStandardMaterial({ color: 0x6a6e74, roughness: 0.5, metalness: 0.85 });
-  const legPairX = 0.72;
+  const legPairX = BW * 0.36;
   const legHeight = PANEL_Y - BH / 2;                 // floor → panel bottom
   for (const x of [-legPairX, legPairX]) {
     const leg = new THREE.Mesh(
@@ -3605,59 +3606,118 @@ function buildCorkBoardWithMap() {
   }
   // diagonal back brace between the two legs
   const brace = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.018, 0.018, 1.6, 10), legMat
+    new THREE.CylinderGeometry(0.018, 0.018, legPairX * 2, 10), legMat
   );
   brace.position.set(0, 0.45, -0.05);
   brace.rotation.z = Math.PI / 2;
   g.add(brace);
 
   // ---- world map canvas ----
-  const mw = 1024, mh = 768;
+  // Wider canvas to match the new wider board aspect.
+  const mw = 1280, mh = 768;
   const mcv = document.createElement('canvas');
   mcv.width = mw; mcv.height = mh;
   const mctx = mcv.getContext('2d');
-  // aged paper background
-  mctx.fillStyle = '#f5e8c0';
-  mctx.fillRect(0, 0, mw, mh);
-  // subtle paper grain
-  for (let i = 0; i < 1600; i++) {
-    mctx.fillStyle = `rgba(120, 80, 30, ${Math.random() * 0.06})`;
-    mctx.fillRect(Math.random() * mw, Math.random() * mh, 1.5, 1.5);
+  if (realistic) {
+    // ocean-blue background (will be hidden by the Google Maps iframe when
+    // the player zooms in — this is just what they see from across the room)
+    mctx.fillStyle = '#cfe1ef';
+    mctx.fillRect(0, 0, mw, mh);
+    // soft ocean grain
+    for (let i = 0; i < 1600; i++) {
+      mctx.fillStyle = `rgba(60, 110, 160, ${Math.random() * 0.08})`;
+      mctx.fillRect(Math.random() * mw, Math.random() * mh, 1.5, 1.5);
+    }
+    // graticule
+    mctx.strokeStyle = 'rgba(40, 70, 110, 0.20)';
+    mctx.lineWidth = 1;
+    for (let x = 100; x < mw; x += 100) {
+      mctx.beginPath(); mctx.moveTo(x, 60); mctx.lineTo(x, mh - 60); mctx.stroke();
+    }
+    for (let y = 100; y < mh; y += 100) {
+      mctx.beginPath(); mctx.moveTo(60, y); mctx.lineTo(mw - 60, y); mctx.stroke();
+    }
+    // more detailed continent shapes (eyeballed, equirectangular)
+    mctx.fillStyle = '#6f8f5a';
+    function shape(pts) {
+      mctx.beginPath();
+      mctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) mctx.lineTo(pts[i][0], pts[i][1]);
+      mctx.closePath();
+      mctx.fill();
+    }
+    // N. America (with Alaska stub + Florida tail)
+    shape([[140,180],[220,160],[280,170],[330,210],[360,260],[380,320],[360,390],[330,430],[290,460],[260,420],[230,400],[190,370],[160,320],[140,260]]);
+    shape([[60,200],[110,180],[130,220],[90,240]]);   // Alaska
+    // S. America
+    shape([[340,480],[400,470],[420,520],[430,600],[400,660],[360,680],[330,640],[320,580],[330,520]]);
+    // Europe (small)
+    shape([[600,210],[680,200],[720,220],[740,260],[700,290],[640,300],[610,270]]);
+    // Africa
+    shape([[620,310],[700,310],[740,360],[760,440],[740,520],[700,580],[660,610],[630,570],[610,500],[600,420],[610,360]]);
+    // Asia
+    shape([[720,180],[860,170],[980,180],[1080,210],[1140,260],[1120,320],[1040,360],[940,360],[840,340],[760,310],[720,260]]);
+    // SE Asia / Indonesia (a few small islands)
+    shape([[1000,410],[1080,400],[1100,440],[1040,460]]);
+    shape([[1080,470],[1140,470],[1140,500],[1090,500]]);
+    // Australia
+    shape([[1020,530],[1140,520],[1180,560],[1160,610],[1080,620],[1020,590]]);
+    // Greenland
+    shape([[440,140],[500,130],[520,180],[470,210],[440,180]]);
+    // border + title
+    mctx.strokeStyle = '#1f2a3a';
+    mctx.lineWidth = 7;
+    mctx.strokeRect(46, 46, mw - 92, mh - 92);
+    mctx.fillStyle = '#1f2a3a';
+    mctx.font = '300 38px "Cormorant Garamond", serif';
+    mctx.textAlign = 'center';
+    mctx.fillText('the real world', mw / 2, 100);
+    mctx.font = '14px serif';
+    mctx.fillText('press e to explore', mw / 2, mh - 70);
+  } else {
+    // aged paper background
+    mctx.fillStyle = '#f5e8c0';
+    mctx.fillRect(0, 0, mw, mh);
+    // subtle paper grain
+    for (let i = 0; i < 1600; i++) {
+      mctx.fillStyle = `rgba(120, 80, 30, ${Math.random() * 0.06})`;
+      mctx.fillRect(Math.random() * mw, Math.random() * mh, 1.5, 1.5);
+    }
+    // faint lat/long grid
+    mctx.strokeStyle = 'rgba(80, 50, 20, 0.18)';
+    mctx.lineWidth = 1;
+    for (let x = 100; x < mw; x += 100) {
+      mctx.beginPath(); mctx.moveTo(x, 60); mctx.lineTo(x, mh - 60); mctx.stroke();
+    }
+    for (let y = 100; y < mh; y += 100) {
+      mctx.beginPath(); mctx.moveTo(60, y); mctx.lineTo(mw - 60, y); mctx.stroke();
+    }
+    // continents — stylised blobs (scaled to wider canvas)
+    mctx.fillStyle = '#5a8c4a';
+    function blob(pts) {
+      mctx.beginPath();
+      mctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) mctx.lineTo(pts[i][0], pts[i][1]);
+      mctx.closePath();
+      mctx.fill();
+    }
+    blob([[170,230],[360,210],[400,300],[360,400],[250,440],[180,330]]);                   // N. America
+    blob([[360,460],[450,460],[470,580],[410,640],[350,560]]);                             // S. America
+    blob([[610,220],[750,210],[760,280],[640,290]]);                                       // Europe
+    blob([[640,300],[770,300],[820,440],[720,560],[650,500],[610,360]]);                   // Africa
+    blob([[750,200],[1100,200],[1140,330],[1000,390],[870,360],[770,290]]);                // Asia
+    blob([[1020,490],[1160,480],[1170,550],[1060,570]]);                                   // Australia
+    // border + title
+    mctx.strokeStyle = '#3a2410';
+    mctx.lineWidth = 7;
+    mctx.strokeRect(46, 46, mw - 92, mh - 92);
+    mctx.fillStyle = '#3a2410';
+    mctx.font = 'italic 38px "Cormorant Garamond", serif';
+    mctx.textAlign = 'center';
+    mctx.fillText('our world', mw / 2, 100);
+    mctx.font = '14px serif';
+    mctx.fillText('— 2026 —', mw / 2, mh - 70);
   }
-  // faint lat/long grid
-  mctx.strokeStyle = 'rgba(80, 50, 20, 0.18)';
-  mctx.lineWidth = 1;
-  for (let x = 100; x < mw; x += 100) {
-    mctx.beginPath(); mctx.moveTo(x, 60); mctx.lineTo(x, mh - 60); mctx.stroke();
-  }
-  for (let y = 100; y < mh; y += 100) {
-    mctx.beginPath(); mctx.moveTo(60, y); mctx.lineTo(mw - 60, y); mctx.stroke();
-  }
-  // continents — stylised blobs
-  mctx.fillStyle = '#5a8c4a';
-  function blob(pts) {
-    mctx.beginPath();
-    mctx.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length; i++) mctx.lineTo(pts[i][0], pts[i][1]);
-    mctx.closePath();
-    mctx.fill();
-  }
-  blob([[130,230],[280,210],[320,300],[290,400],[200,440],[140,330]]);                   // N. America
-  blob([[290,460],[360,460],[380,580],[330,640],[280,560]]);                             // S. America
-  blob([[490,220],[600,210],[610,280],[510,290]]);                                       // Europe
-  blob([[510,300],[620,300],[660,440],[580,560],[520,500],[490,360]]);                   // Africa
-  blob([[600,200],[880,200],[910,330],[800,390],[700,360],[620,290]]);                   // Asia
-  blob([[820,490],[930,480],[940,550],[850,570]]);                                       // Australia
-  // border + title
-  mctx.strokeStyle = '#3a2410';
-  mctx.lineWidth = 7;
-  mctx.strokeRect(46, 46, mw - 92, mh - 92);
-  mctx.fillStyle = '#3a2410';
-  mctx.font = 'italic 38px "Cormorant Garamond", serif';
-  mctx.textAlign = 'center';
-  mctx.fillText('our world', mw / 2, 100);
-  mctx.font = '14px serif';
-  mctx.fillText('— 2026 —', mw / 2, mh - 70);
 
   const mapTex = new THREE.CanvasTexture(mcv);
   mapTex.colorSpace = THREE.SRGBColorSpace;
@@ -3670,6 +3730,15 @@ function buildCorkBoardWithMap() {
   const map = new THREE.Mesh(new THREE.PlaneGeometry(MW, MH), mapMat);
   map.position.set(0, PANEL_Y, BD / 2 + 0.001);
   g.add(map);
+  // expose key dims so callers can position cameras / iframes precisely
+  g.userData.BW = BW;
+  g.userData.BH = BH;
+  g.userData.BD = BD;
+  g.userData.MW = MW;
+  g.userData.MH = MH;
+  g.userData.PANEL_Y = PANEL_Y;
+  g.userData.mapMesh = map;
+  g.userData.realistic = realistic;
 
   // ---- four red push pins at the corners of the map ----
   const pinHeadMat = new THREE.MeshStandardMaterial({
@@ -4260,12 +4329,46 @@ function buildProjectsScene() {
   openBook.visible = false;
   scene.add(openBook);
 
-  // standing cork board with a world map, off to the left of the bench/crates,
-  // rotated diagonally so its face is roughly perpendicular to the table.
-  const corkBoard = buildCorkBoardWithMap();
-  corkBoard.position.set(-7.6, 0, -0.8);
-  corkBoard.rotation.y = Math.PI / 4;
-  scene.add(corkBoard);
+  // standing cork boards with world maps, off to the left of the bench/crates.
+  // Two boards side-by-side, both rotated anticlockwise so the long display
+  // faces in toward the room.  Board A keeps the stylised painted map;
+  // board B becomes the interactive realistic (Google Maps) map when zoomed.
+  const BOARD_ANGLE = Math.PI / 2;       // anticlockwise from previous Math.PI/4 by 45°
+  const corkBoardA = buildCorkBoardWithMap({ realistic: false });
+  const corkBoardB = buildCorkBoardWithMap({ realistic: true });
+  const BW = corkBoardA.userData.BW;
+  // shared face/side vectors (boards face +face direction, lined up along +side)
+  const faceX = Math.sin(BOARD_ANGLE), faceZ = Math.cos(BOARD_ANGLE);
+  const sideX = Math.cos(BOARD_ANGLE), sideZ = -Math.sin(BOARD_ANGLE);
+  // Pair centre — kept roughly where the original board sat.
+  const PAIR_CX = -6.6, PAIR_CZ = -0.4;
+  const halfOffset = BW / 2;             // boards touch frame-to-frame
+  corkBoardA.position.set(PAIR_CX - sideX * halfOffset, 0, PAIR_CZ - sideZ * halfOffset);
+  corkBoardA.rotation.y = BOARD_ANGLE;
+  corkBoardB.position.set(PAIR_CX + sideX * halfOffset, 0, PAIR_CZ + sideZ * halfOffset);
+  corkBoardB.rotation.y = BOARD_ANGLE;
+  scene.add(corkBoardA);
+  scene.add(corkBoardB);
+
+  // Board metadata used by the front-view zoom interaction
+  const boardsList = [corkBoardA, corkBoardB].map(b => {
+    const bx = b.position.x, bz = b.position.z;
+    // a point ~1.0m out from the panel along the face normal (where Baymax
+    // stands while reading) and a point at the map centre on the panel
+    const standOut = 1.0;
+    const panelY = b.userData.PANEL_Y;
+    const standPos = new THREE.Vector3(bx + faceX * standOut, 0, bz + faceZ * standOut);
+    const mapCentre = new THREE.Vector3(bx, panelY, bz);
+    return {
+      group: b,
+      realistic: b.userData.realistic,
+      x: bx, z: bz,
+      faceDir: new THREE.Vector3(faceX, 0, faceZ),
+      sideDir: new THREE.Vector3(sideX, 0, sideZ),
+      standPos,
+      mapCentre,
+    };
+  });
 
   // exit sign — points back to the RIGHT (the entry/exit edge for projects)
   const exitSign = buildExitSign('right');
@@ -4336,6 +4439,8 @@ function buildProjectsScene() {
     pageH,
     // crates with peep-inside interaction
     crates,
+    // cork boards (stylised + realistic world map) with front-view zoom
+    boards: boardsList,
   };
 }
 
@@ -4494,7 +4599,120 @@ html { scroll-behavior: smooth; }
       try { unstickProjectsBaymax(projectsWorld.baymax); } catch (_) {}
       restoreParentFocus();
     }
+    if (projectsWorld.boardActive) {
+      projectsWorld.boardActive = false;
+      try { unstickProjectsBaymax(projectsWorld.baymax); } catch (_) {}
+      restoreParentFocus();
+    }
   });
+
+  // ---- Realistic-map iframe (CSS3D) on the second cork board ----
+  // Wrapped in a same-origin srcdoc so the parent can scroll/zoom Google Maps
+  // (which is itself cross-origin).  Click anywhere → opens Google Maps in a
+  // new tab.  E or ESC → close board view.
+  const GMAPS_URL = 'https://www.google.com/maps?ll=20,0&z=2&t=m&output=embed';
+  const GMAPS_OPEN_URL = 'https://www.google.com/maps/@20,0,3z';
+  const mapsWrapperHTML = `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html, body { margin:0; padding:0; background:#eef3f7; cursor:pointer; height:100%; }
+.frame { display:block; width:100%; height:100%; border:0; }
+.banner {
+  position: fixed; bottom: 10px; right: 10px;
+  background: rgba(20,20,20,0.78); color: #fff;
+  font: 12px/1.2 -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 6px 10px; border-radius: 999px;
+  pointer-events: none;
+}
+</style></head><body tabindex="-1">
+<iframe class="frame" src="${GMAPS_URL}" referrerpolicy="no-referrer"></iframe>
+<div class="banner">click to open ↗</div>
+<script>
+  document.addEventListener('click', function(e){
+    if (e.target && e.target.tagName === 'IFRAME') return;
+    window.open('${GMAPS_OPEN_URL}', '_blank', 'noopener');
+  });
+  document.addEventListener('keydown', function(e){
+    var k = (e.key || '').toLowerCase();
+    if (k === 'e' || k === 'escape') {
+      e.preventDefault();
+      try { window.parent.__noahCloseBoard && window.parent.__noahCloseBoard(); } catch (_) {}
+    }
+  });
+<\/script>
+</body></html>`;
+
+  const mapsIframe = document.createElement('iframe');
+  mapsIframe.srcdoc = mapsWrapperHTML;
+  // pixel dimensions chosen to roughly match the map-plane aspect (MW:MH ≈ 2.205)
+  mapsIframe.style.width = '1280px';
+  mapsIframe.style.height = '580px';
+  mapsIframe.style.border = '0';
+  mapsIframe.style.background = '#eef3f7';
+  mapsIframe.style.pointerEvents = 'none';
+  mapsIframe.setAttribute('tabindex', '0');
+  // Position the CSS3D iframe flush with the realistic board's map plane.
+  const realisticBoardData = projectsWorld.boards.find(b => b.realistic);
+  const boardPanelY = realisticBoardData.group.userData.PANEL_Y;
+  const boardBD     = realisticBoardData.group.userData.BD;
+  const boardMW     = realisticBoardData.group.userData.MW;
+  const boardMH     = realisticBoardData.group.userData.MH;
+  const boardAngle  = realisticBoardData.group.rotation.y;
+  const boardFaceX  = Math.sin(boardAngle);
+  const boardFaceZ  = Math.cos(boardAngle);
+  const mapsCssObj = new CSS3DObject(mapsIframe);
+  const msx = boardMW / 1280;
+  const msy = boardMH / 580;
+  mapsCssObj.scale.set(msx, msy, msx);
+  mapsCssObj.position.set(
+    realisticBoardData.x + (boardBD / 2 + 0.006) * boardFaceX,
+    boardPanelY,
+    realisticBoardData.z + (boardBD / 2 + 0.006) * boardFaceZ
+  );
+  mapsCssObj.rotation.y = boardAngle;
+  mapsCssObj.visible = false;
+  projectsWorld.scene.add(mapsCssObj);
+  projectsWorld.mapsIframe = mapsIframe;
+  projectsWorld.mapsCssObj = mapsCssObj;
+
+  // Close board view (called from inside the maps srcdoc and the capture-phase
+  // window keydown listener below).
+  function exitBoardFromIframe() {
+    if (projectsWorld.boardActive) {
+      projectsWorld.boardActive = false;
+      try { unstickProjectsBaymax(projectsWorld.baymax); } catch (_) {}
+      restoreParentFocus();
+    }
+  }
+  window.__noahCloseBoard = exitBoardFromIframe;
+  window.addEventListener('keydown', (e) => {
+    if (!projectsWorld || !projectsWorld.boardActive) return;
+    const k = (e.key || '').toLowerCase();
+    if (k === 'e' || k === 'escape') {
+      e.preventDefault();
+      exitBoardFromIframe();
+    }
+  }, true);
+  mapsIframe.addEventListener('load', () => {
+    try {
+      const innerWin = mapsIframe.contentWindow;
+      if (innerWin && innerWin.addEventListener) {
+        innerWin.addEventListener('keydown', e => {
+          const k = (e.key || '').toLowerCase();
+          if (k === 'e' || k === 'escape') {
+            e.preventDefault();
+            exitBoardFromIframe();
+          }
+        });
+      }
+    } catch (e) { /* cross-origin — focus-sink fallback handles it */ }
+  });
+  mapsIframe.addEventListener('mouseleave', () => {
+    if (projectsWorld.boardActive) {
+      try { mapsIframe.blur(); } catch (_) {}
+      try { focusSink?.focus({ preventScroll: true }); } catch (_) {}
+    }
+  });
+  projectsWorld.exitBoardFromIframe = exitBoardFromIframe;
 
   // "click to open" pill — visible only while in the computer view, styled
   // to match the intro tap-to-begin button.  Click → open paattikiiltoon.fi
@@ -4829,6 +5047,9 @@ html { scroll-behavior: smooth; }
       projectsWorld.computerActive = false;
       projectsWorld.bookActive = false;
       projectsWorld.boxActive = false;
+      projectsWorld.boardActive = false;
+      if (projectsWorld.mapsCssObj) projectsWorld.mapsCssObj.visible = false;
+      if (projectsWorld.mapsIframe) projectsWorld.mapsIframe.style.pointerEvents = 'none';
       // also restore any open crate
       if (projectsWorld.crates) {
         for (const crate of projectsWorld.crates) {
@@ -6167,6 +6388,66 @@ html { scroll-behavior: smooth; }
       if (laptopOpenSiteBtn) laptopOpenSiteBtn.style.display = 'none';
     }
 
+    // --- BOARD VIEW STATE (front-view zoom of the cork-board world maps) ---
+    if (projectsWorld.boardActive) {
+      const board = projectsWorld.activeBoard;
+      // park Baymax just in front of the panel, facing the board
+      b.position.set(board.standPos.x, 0, board.standPos.z);
+      const dxB = board.mapCentre.x - board.standPos.x;
+      const dzB = board.mapCentre.z - board.standPos.z;
+      b.rotation.set(0, Math.atan2(dxB, dzB), 0);
+      resetWalk(b);
+      resetHead(b);
+
+      // Camera: float back along the face direction, lined up with the panel
+      const camDist = 2.0;
+      const camTargetPos = new THREE.Vector3(
+        board.mapCentre.x + board.faceDir.x * camDist,
+        board.mapCentre.y + 0.05,
+        board.mapCentre.z + board.faceDir.z * camDist
+      );
+      const camTargetLook = board.mapCentre.clone();
+      const kk = 1 - Math.pow(0.001, dt);
+      projectsWorld.camPos.lerp(camTargetPos, kk);
+      projectsWorld.camLook.lerp(camTargetLook, kk);
+      projectsWorld.camera.position.copy(projectsWorld.camPos);
+      projectsWorld.camera.lookAt(projectsWorld.camLook);
+
+      // For the realistic board: hide its painted map and show the Google
+      // Maps iframe in its place; let the user click + drag inside the map.
+      if (board.realistic) {
+        const mapMesh = board.group.userData.mapMesh;
+        if (mapMesh) mapMesh.visible = false;
+        if (projectsWorld.mapsCssObj) projectsWorld.mapsCssObj.visible = true;
+        if (projectsWorld.mapsIframe) projectsWorld.mapsIframe.style.pointerEvents = 'auto';
+      }
+
+      projectsPromptEl.style.display = 'none';
+
+      // press E or ESC to exit (auto-repeat-guarded by eHeld)
+      if (keys['e'] || keys['escape']) {
+        if (!projectsWorld.eHeld) {
+          projectsWorld.boardActive = false;
+          unstickProjectsBaymax(b);
+          restoreParentFocus();
+        }
+        projectsWorld.eHeld = true;
+      } else {
+        projectsWorld.eHeld = false;
+      }
+      return;
+    } else {
+      // not in board view — hide iframe and restore the realistic painted map
+      if (projectsWorld.mapsCssObj) projectsWorld.mapsCssObj.visible = false;
+      if (projectsWorld.mapsIframe) projectsWorld.mapsIframe.style.pointerEvents = 'none';
+      if (projectsWorld.boards) {
+        for (const board of projectsWorld.boards) {
+          const mapMesh = board.group.userData.mapMesh;
+          if (mapMesh && !mapMesh.visible) mapMesh.visible = true;
+        }
+      }
+    }
+
     // smoothly return camera to the standard top-down view if it had moved
     {
       const k = 1 - Math.pow(0.001, dt);
@@ -6265,6 +6546,21 @@ html { scroll-behavior: smooth; }
         }
       }
     }
+    // Boards: proximity measured to the "standPos" (1 m out from the panel)
+    // so the prompt appears when Baymax is in front of the panel, not behind.
+    if (projectsWorld.boards) {
+      for (const board of projectsWorld.boards) {
+        const dB = Math.hypot(b.position.x - board.standPos.x, b.position.z - board.standPos.z);
+        if (dB < 2.0 && (!near || dB < near.dist)) {
+          near = {
+            type: 'board',
+            dist: dB,
+            promptPos: new THREE.Vector3(board.mapCentre.x, 2.55, board.mapCentre.z),
+            board,
+          };
+        }
+      }
+    }
 
     if (near) {
       projectsPromptEl.textContent = 'click e';
@@ -6280,6 +6576,9 @@ html { scroll-behavior: smooth; }
             // Don't auto-open paattikiiltoon.fi — the srcdoc shell already
             // navigates to it on click, so the user can decide whether to
             // visit the real site.
+          } else if (near.type === 'board') {
+            projectsWorld.boardActive = true;
+            projectsWorld.activeBoard = near.board;
           } else if (near.type === 'box') {
             // open this crate's interior
             projectsWorld.boxActive = true;
