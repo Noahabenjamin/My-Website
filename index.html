@@ -3714,6 +3714,104 @@ function buildCaveScene() {
 // Scene 8 — PROJECTS (entered through the "projects" exit, left edge of cobble)
 // ==========================================================================
 
+// ---- Realistic cork-board texture ----
+// Painted procedurally onto a Canvas, then wrapped as a THREE.CanvasTexture.
+// Builds: granular base, ~3500 fragment polygons of varied size, a touch of
+// fibrous grain, a handful of darker "pits" (real cork has small holes), and
+// a subtle vignette so the board doesn't read as a uniform plane.
+function makeCorkTexture() {
+  const W = 1024, H = 768;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const c = cv.getContext('2d');
+  // base gradient: lighter top, slightly darker bottom (cork ages downward)
+  const grad = c.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#b88052');
+  grad.addColorStop(1, '#9c6c40');
+  c.fillStyle = grad;
+  c.fillRect(0, 0, W, H);
+  // dense grain noise (every-pixel coloured speckle)
+  const img = c.getImageData(0, 0, W, H);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 38;
+    img.data[i]   = Math.max(0, Math.min(255, img.data[i]   + n));
+    img.data[i+1] = Math.max(0, Math.min(255, img.data[i+1] + n * 0.85));
+    img.data[i+2] = Math.max(0, Math.min(255, img.data[i+2] + n * 0.6));
+  }
+  c.putImageData(img, 0, 0);
+  // irregular fragment polygons — the dominant visual signature of cork
+  function fragment(cx, cy, r) {
+    const sides = 5 + Math.floor(Math.random() * 4);   // 5..8
+    c.beginPath();
+    for (let i = 0; i < sides; i++) {
+      const a = (i / sides) * Math.PI * 2 + Math.random() * 0.4;
+      const rr = r * (0.7 + Math.random() * 0.55);
+      const x = cx + Math.cos(a) * rr;
+      const y = cy + Math.sin(a) * rr;
+      if (i === 0) c.moveTo(x, y);
+      else         c.lineTo(x, y);
+    }
+    c.closePath();
+  }
+  // light fragments (cork particles catching light)
+  for (let i = 0; i < 2400; i++) {
+    const v = 145 + Math.floor(Math.random() * 70);
+    c.fillStyle = `rgba(${v + 30}, ${v - 10}, ${Math.max(0, v - 55)}, ${0.55 + Math.random() * 0.4})`;
+    fragment(Math.random() * W, Math.random() * H, 3 + Math.random() * 9);
+    c.fill();
+  }
+  // dark fragments (shaded crevices between particles)
+  for (let i = 0; i < 1100; i++) {
+    const v = 50 + Math.floor(Math.random() * 40);
+    c.fillStyle = `rgba(${v + 18}, ${v + 6}, ${Math.max(0, v - 12)}, ${0.45 + Math.random() * 0.35})`;
+    fragment(Math.random() * W, Math.random() * H, 2 + Math.random() * 5);
+    c.fill();
+  }
+  // mid-tone fragments to soften the contrast
+  for (let i = 0; i < 2200; i++) {
+    const v = 95 + Math.floor(Math.random() * 60);
+    c.fillStyle = `rgba(${v + 30}, ${v}, ${Math.max(0, v - 28)}, ${0.30 + Math.random() * 0.35})`;
+    fragment(Math.random() * W, Math.random() * H, 1.5 + Math.random() * 4);
+    c.fill();
+  }
+  // wispy fibre strokes
+  c.lineWidth = 0.7;
+  for (let i = 0; i < 220; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const len = 6 + Math.random() * 22;
+    const a = Math.random() * Math.PI * 2;
+    c.strokeStyle = `rgba(60, 38, 14, ${0.15 + Math.random() * 0.20})`;
+    c.beginPath();
+    c.moveTo(x, y);
+    c.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+    c.stroke();
+  }
+  // small pits / pinholes
+  for (let i = 0; i < 90; i++) {
+    const x = Math.random() * W, y = Math.random() * H;
+    const r = 1 + Math.random() * 2.5;
+    const pit = c.createRadialGradient(x, y, 0, x, y, r);
+    pit.addColorStop(0, 'rgba(20, 10, 4, 0.85)');
+    pit.addColorStop(1, 'rgba(40, 24, 10, 0)');
+    c.fillStyle = pit;
+    c.beginPath();
+    c.arc(x, y, r, 0, Math.PI * 2);
+    c.fill();
+  }
+  // soft vignette
+  const vg = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.78);
+  vg.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  vg.addColorStop(1, 'rgba(20, 10, 0, 0.30)');
+  c.fillStyle = vg;
+  c.fillRect(0, 0, W, H);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 16;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
+
 function buildCorkBoardWithMap(opts = {}) {
   // Standing cork board with metal frame + legs, holding a stylised world
   // map pinned at the four corners.  Returned as a group centred at the
@@ -3721,27 +3819,9 @@ function buildCorkBoardWithMap(opts = {}) {
   const realistic = opts.realistic === true;
   const g = new THREE.Group();
 
-  // ---- cork texture canvas ----
-  const cw = 512, ch = 384;
-  const corkCv = document.createElement('canvas');
-  corkCv.width = cw; corkCv.height = ch;
-  const cctx = corkCv.getContext('2d');
-  cctx.fillStyle = '#a87842';
-  cctx.fillRect(0, 0, cw, ch);
-  for (let i = 0; i < 4500; i++) {
-    const v = 95 + Math.floor(Math.random() * 90);
-    cctx.fillStyle = `rgb(${v + 30}, ${v}, ${Math.max(0, v - 25)})`;
-    const x = Math.random() * cw;
-    const y = Math.random() * ch;
-    const s = 1.2 + Math.random() * 2.4;
-    cctx.beginPath();
-    cctx.arc(x, y, s, 0, Math.PI * 2);
-    cctx.fill();
-  }
-  const corkTex = new THREE.CanvasTexture(corkCv);
-  corkTex.colorSpace = THREE.SRGBColorSpace;
-  corkTex.anisotropy = 8;
-  const corkMat = new THREE.MeshStandardMaterial({ map: corkTex, roughness: 0.95 });
+  // ---- cork texture (shared, realistic procedural texture) ----
+  const corkTex = makeCorkTexture();
+  const corkMat = new THREE.MeshStandardMaterial({ map: corkTex, roughness: 0.92, metalness: 0.0, bumpMap: corkTex, bumpScale: 0.01 });
 
   // ---- panel + mounting height ----
   const BW = 3.2, BH = 1.6, BD = 0.04;
@@ -4594,73 +4674,171 @@ function buildCorkBoardWithMap(opts = {}) {
 // where `group` is a THREE.Group anchored at its own origin (Y-up) and
 // `update` is called every frame while the item is the active demo.
 
-// ---- 1. PCR thermocycler ----
+// ---- 1. PCR thermocycler (BioRad / Applied Biosystems-style benchtop) ----
 function buildDemoPCR() {
   const g = new THREE.Group();
-  const caseMat  = new THREE.MeshStandardMaterial({ color: 0xe2e6ec, roughness: 0.4, metalness: 0.2 });
-  const darkMat  = new THREE.MeshStandardMaterial({ color: 0x222428, roughness: 0.6 });
-  const wellMat  = new THREE.MeshStandardMaterial({ color: 0x9cb6dd, roughness: 0.7, transparent: true, opacity: 0.85 });
-  // body
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.16, 0.28), caseMat);
-  body.position.y = 0.08;
-  g.add(body);
-  // sample block on top
-  const block = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.20), darkMat);
-  block.position.y = 0.165;
-  g.add(block);
-  // 8 × 12 wells (96-well plate)
+  // ---- materials ----
+  const caseMat   = new THREE.MeshStandardMaterial({ color: 0xe6e9ee, roughness: 0.35, metalness: 0.28 });
+  const caseDark  = new THREE.MeshStandardMaterial({ color: 0xc7ccd4, roughness: 0.45, metalness: 0.28 });
+  const trimMat   = new THREE.MeshStandardMaterial({ color: 0x2c3038, roughness: 0.45, metalness: 0.45 });
+  const blockMat  = new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.55, metalness: 0.45 });
+  const wellMat   = new THREE.MeshStandardMaterial({ color: 0xa9c3e5, roughness: 0.55, metalness: 0.10, transparent: true, opacity: 0.92, emissive: 0x1a2640, emissiveIntensity: 0.20 });
+  const tubeCapMat = new THREE.MeshStandardMaterial({ color: 0xeef5ff, roughness: 0.3, metalness: 0.05, transparent: true, opacity: 0.7 });
+  const lcdBgMat  = new THREE.MeshBasicMaterial({ color: 0x0c2030 });
+  const btnMat    = new THREE.MeshStandardMaterial({ color: 0x484c54, roughness: 0.5, metalness: 0.4 });
+  const ledGreen  = new THREE.MeshBasicMaterial({ color: 0x82ffa6 });
+  const ledRed    = new THREE.MeshBasicMaterial({ color: 0xff6a6a });
+  const ledAmber  = new THREE.MeshBasicMaterial({ color: 0xffc060 });
+  // ---- main case (stacked plates → chamfered look) ----
+  function plate(w, h, d, y, mat) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.y = y;
+    g.add(m);
+    return m;
+  }
+  plate(0.40, 0.015, 0.32, 0.0075, caseDark);          // bottom plinth
+  plate(0.39, 0.06,  0.305, 0.045, caseMat);           // main body
+  plate(0.395, 0.005, 0.31, 0.078, trimMat);           // trim line
+  plate(0.39, 0.07,  0.305, 0.115, caseMat);           // upper body
+  plate(0.40, 0.013, 0.32, 0.157, caseDark);           // cap rim
+  // ---- LCD display panel inset into the front ----
+  // canvas-rendered "Cycle 17/40   94°C → 55°C   00:42"
+  const lcdCv = document.createElement('canvas');
+  lcdCv.width = 320; lcdCv.height = 120;
+  const lctx = lcdCv.getContext('2d');
+  lctx.fillStyle = '#0c2030';
+  lctx.fillRect(0, 0, 320, 120);
+  lctx.fillStyle = '#7fd6ff';
+  lctx.font = 'bold 22px monospace';
+  lctx.fillText('PCR  RUNNING', 12, 30);
+  lctx.font = '18px monospace';
+  lctx.fillStyle = '#cde6f5';
+  lctx.fillText('Cycle  17 / 40', 12, 60);
+  lctx.fillText('Block  94.0°C → 55.0°C', 12, 84);
+  lctx.fillText('Time   00:42:13', 12, 108);
+  const lcdTex = new THREE.CanvasTexture(lcdCv);
+  lcdTex.colorSpace = THREE.SRGBColorSpace;
+  const lcdMat = new THREE.MeshBasicMaterial({ map: lcdTex });
+  const lcdInset = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.07, 0.005), lcdBgMat);
+  lcdInset.position.set(-0.02, 0.072, 0.155);
+  g.add(lcdInset);
+  const lcd = new THREE.Mesh(new THREE.PlaneGeometry(0.19, 0.065), lcdMat);
+  lcd.position.set(-0.02, 0.072, 0.158);
+  g.add(lcd);
+  // ---- soft-touch buttons on the right of the LCD ----
+  const buttonPositions = [[0.12, 0.090], [0.16, 0.090], [0.12, 0.052], [0.16, 0.052]];
+  for (const [bx, by] of buttonPositions) {
+    const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.006, 18), btnMat);
+    btn.rotation.x = Math.PI / 2;
+    btn.position.set(bx, by, 0.156);
+    g.add(btn);
+  }
+  // status LEDs (a small column to the left of the LCD)
+  const led1 = new THREE.Mesh(new THREE.SphereGeometry(0.006, 12, 10), ledGreen);
+  led1.position.set(-0.14, 0.092, 0.156);
+  g.add(led1);
+  const led2 = new THREE.Mesh(new THREE.SphereGeometry(0.006, 12, 10), ledRed);
+  led2.position.set(-0.14, 0.072, 0.156);
+  g.add(led2);
+  const led3 = new THREE.Mesh(new THREE.SphereGeometry(0.006, 12, 10), ledAmber);
+  led3.position.set(-0.14, 0.052, 0.156);
+  g.add(led3);
+  // brand strip across the top of the front
+  const brandCv = document.createElement('canvas');
+  brandCv.width = 320; brandCv.height = 40;
+  const bctx = brandCv.getContext('2d');
+  bctx.fillStyle = '#e6e9ee'; bctx.fillRect(0, 0, 320, 40);
+  bctx.fillStyle = '#2c3038';
+  bctx.font = '600 22px "Inter", sans-serif';
+  bctx.fillText('Thermal Cycler  T-2400', 12, 28);
+  const brandTex = new THREE.CanvasTexture(brandCv);
+  brandTex.colorSpace = THREE.SRGBColorSpace;
+  const brand = new THREE.Mesh(new THREE.PlaneGeometry(0.30, 0.025), new THREE.MeshBasicMaterial({ map: brandTex }));
+  brand.position.set(0, 0.125, 0.156);
+  g.add(brand);
+  // ---- side air vents (slits on the left/right sides) ----
+  const vents = new THREE.Group();
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i < 10; i++) {
+      const slit = new THREE.Mesh(new THREE.BoxGeometry(0.001, 0.005, 0.03), trimMat);
+      slit.position.set(sx * 0.197, 0.045 + i * 0.008, 0);
+      vents.add(slit);
+    }
+  }
+  g.add(vents);
+  // ---- sample block & 96 wells (8 rows × 12 cols) ----
+  const blockGroup = new THREE.Group();
+  const blockBase = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.012, 0.26), trimMat);
+  blockBase.position.y = 0.169;
+  blockGroup.add(blockBase);
+  const blockTop = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.04, 0.22), blockMat);
+  blockTop.position.y = 0.195;
+  blockGroup.add(blockTop);
+  g.add(blockGroup);
   const wells = [];
   const COLS = 12, ROWS = 8;
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      const w = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.0075, 0.0075, 0.020, 10),
-        wellMat
-      );
-      w.position.set(-0.110 + c * 0.020, 0.200, -0.072 + r * 0.020);
+      // well = cone-tapered cylinder (wider top, narrow bottom) for realism
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.0072, 0.0040, 0.024, 12), wellMat);
+      w.position.set(-0.110 + c * 0.020, 0.207, -0.077 + r * 0.020);
       g.add(w);
       wells.push(w);
+      // matching tube cap above each well (showing tubes are loaded)
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.0085, 0.004, 10), tubeCapMat);
+      cap.position.set(w.position.x, 0.222, w.position.z);
+      g.add(cap);
     }
   }
-  // hinged lid (open)
+  // ---- heated lid on a real hinge mechanism ----
   const lidPivot = new THREE.Group();
-  lidPivot.position.set(0, 0.16, -0.14);
-  const lid = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.03, 0.30), caseMat);
-  lid.position.set(0, 0.015, 0.15);
-  lidPivot.add(lid);
-  // small viewing window on the lid
-  const viewWin = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.10), new THREE.MeshBasicMaterial({ color: 0x2a3a4a }));
-  viewWin.rotation.x = -Math.PI / 2;
-  viewWin.position.set(0, 0.032, 0.15);
-  lidPivot.add(viewWin);
-  lidPivot.rotation.x = -Math.PI * 0.42;     // open
+  lidPivot.position.set(0, 0.164, -0.135);          // back-edge hinge
+  // hinge cylinders (visible at the back)
+  for (const sx of [-0.13, 0.13]) {
+    const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.025, 16), trimMat);
+    hinge.rotation.z = Math.PI / 2;
+    hinge.position.set(sx, 0, 0);
+    lidPivot.add(hinge);
+  }
+  const lidBase = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.018, 0.28), caseMat);
+  lidBase.position.set(0, 0.011, 0.140);
+  lidPivot.add(lidBase);
+  const lidTop  = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.020, 0.26), caseDark);
+  lidTop.position.set(0, 0.030, 0.140);
+  lidPivot.add(lidTop);
+  // viewing window (a darker tinted glass panel)
+  const lidGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.18), new THREE.MeshStandardMaterial({ color: 0x182a36, roughness: 0.25, metalness: 0.4, transparent: true, opacity: 0.55 }));
+  lidGlass.rotation.x = -Math.PI / 2;
+  lidGlass.position.set(0, 0.041, 0.140);
+  lidPivot.add(lidGlass);
+  // handle on the front of the lid
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.10, 12), trimMat);
+  handle.rotation.z = Math.PI / 2;
+  handle.position.set(0, 0.038, 0.27);
+  lidPivot.add(handle);
+  lidPivot.rotation.x = -Math.PI * 0.40;     // open
   g.add(lidPivot);
-  // front display
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.06), new THREE.MeshBasicMaterial({ color: 0x1a3a5a }));
-  screen.position.set(0, 0.06, 0.141);
-  g.add(screen);
-  // status LEDs on the screen
-  const ledMat1 = new THREE.MeshBasicMaterial({ color: 0x6ce0a0 });
-  const ledMat2 = new THREE.MeshBasicMaterial({ color: 0xff6a6a });
-  const led1 = new THREE.Mesh(new THREE.CircleGeometry(0.006, 12), ledMat1);
-  led1.position.set(-0.06, 0.075, 0.142);
-  g.add(led1);
-  const led2 = new THREE.Mesh(new THREE.CircleGeometry(0.006, 12), ledMat2);
-  led2.position.set(-0.04, 0.075, 0.142);
-  g.add(led2);
+  // ---- back power cable (just a hint) ----
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.10, 8), new THREE.MeshStandardMaterial({ color: 0x14171c, roughness: 0.8 }));
+  cable.rotation.z = Math.PI / 2;
+  cable.position.set(-0.18, 0.08, -0.158);
+  cable.rotation.x = 0.4;
+  g.add(cable);
   let t = 0;
   return {
     group: g,
     update(dt) {
       t += dt;
-      // thermal cycling: wells tint from cool blue (anneal) → orange-red (denature)
-      const phase = (Math.sin(t * 0.9) + 1) * 0.5;   // 0..1
-      const cr = 0.55 + phase * 0.40;
-      const cg = 0.55 + (1 - phase) * 0.20;
-      const cb = 0.90 - phase * 0.55;
+      // thermal-cycling colour: wells shift from cool (anneal) → hot (denature)
+      const phase = (Math.sin(t * 0.85) + 1) * 0.5;     // 0..1
+      const cr = 0.50 + phase * 0.45;
+      const cg = 0.62 - phase * 0.10;
+      const cb = 0.92 - phase * 0.65;
       wellMat.color.setRGB(cr, cg, cb);
+      wellMat.emissive.setRGB(cr * 0.20, cg * 0.10, cb * 0.18);
       // LEDs blink to indicate "running"
-      ledMat1.color.setRGB(0.4 + 0.6 * (Math.sin(t * 4) * 0.5 + 0.5), 1.0, 0.6);
+      ledGreen.color.setRGB(0.3 + 0.55 * (Math.sin(t * 4) * 0.5 + 0.5), 1.0, 0.65);
+      ledAmber.color.setRGB(1.0, 0.65 + 0.30 * (Math.sin(t * 2.5 + 1) * 0.5 + 0.5), 0.30);
     }
   };
 }
@@ -4668,77 +4846,147 @@ function buildDemoPCR() {
 // ---- 2. mRNA → ribosome → protein ----
 function buildDemoRibosome() {
   const g = new THREE.Group();
-  const largeMat = new THREE.MeshStandardMaterial({ color: 0xa6b5d2, roughness: 0.7, flatShading: true });
-  const smallMat = new THREE.MeshStandardMaterial({ color: 0xc3cee5, roughness: 0.7, flatShading: true });
-  const largeSub = new THREE.Mesh(new THREE.SphereGeometry(0.12, 28, 20), largeMat);
-  largeSub.position.y = 0.07;
-  largeSub.scale.set(1.05, 0.95, 0.95);
-  g.add(largeSub);
-  const smallSub = new THREE.Mesh(new THREE.SphereGeometry(0.09, 24, 18), smallMat);
-  smallSub.position.y = -0.05;
-  smallSub.scale.set(1.05, 0.85, 0.95);
-  g.add(smallSub);
-  // mRNA strand passing through the ribosome cleft
-  const strandPts = [];
-  const STRAND_LEN = 0.46;
-  for (let i = 0; i <= 60; i++) {
-    const t = i / 60;
-    strandPts.push(new THREE.Vector3(
-      -STRAND_LEN / 2 + t * STRAND_LEN,
-      0.005 + Math.sin(t * 8) * 0.006,
-      0.05 + Math.sin(t * 4) * 0.005
-    ));
-  }
-  const mrnaCurve = new THREE.CatmullRomCurve3(strandPts);
-  const mrnaMat = new THREE.MeshStandardMaterial({ color: 0xff6e54, roughness: 0.6 });
-  const mrnaTube = new THREE.Mesh(new THREE.TubeGeometry(mrnaCurve, 60, 0.008, 8, false), mrnaMat);
-  g.add(mrnaTube);
-  // codon "beads" — small colored spheres scattered along mRNA
-  const codonGroup = new THREE.Group();
-  for (let i = 0; i < 12; i++) {
-    const c = new THREE.Mesh(
-      new THREE.SphereGeometry(0.012, 10, 8),
-      new THREE.MeshStandardMaterial({
-        color: [0x4a89dc, 0xff8c42, 0x6cdb8a, 0xc97cc1][i % 4],
-        roughness: 0.6
-      })
+  // ===== materials =====
+  const largeMat = new THREE.MeshStandardMaterial({ color: 0x6c84b3, roughness: 0.75, flatShading: true });
+  const largeLumpMat = new THREE.MeshStandardMaterial({ color: 0x8a9fc4, roughness: 0.75, flatShading: true });
+  const smallMat = new THREE.MeshStandardMaterial({ color: 0xc4d0e5, roughness: 0.75, flatShading: true });
+  const smallLumpMat = new THREE.MeshStandardMaterial({ color: 0xb0bcd6, roughness: 0.75, flatShading: true });
+  const tRNAMat = new THREE.MeshStandardMaterial({ color: 0x70c498, roughness: 0.6 });
+  // ===== large (top) ribosomal subunit — a clumpy "potato" of icosahedra =====
+  const largeSubGroup = new THREE.Group();
+  largeSubGroup.position.y = 0.08;
+  const largeCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.13, 1), largeMat);
+  largeCore.scale.set(1.10, 0.90, 1.00);
+  largeSubGroup.add(largeCore);
+  // surface lumps for the rRNA/protein bumps
+  const largeLumps = [];
+  for (let i = 0; i < 14; i++) {
+    const lump = new THREE.Mesh(new THREE.IcosahedronGeometry(0.025 + Math.random() * 0.020, 0), largeLumpMat);
+    const a = Math.random() * Math.PI * 2;
+    const e = (Math.random() - 0.5) * 1.5;          // elevation
+    const r = 0.115 + Math.random() * 0.020;
+    lump.position.set(
+      Math.cos(a) * r * Math.cos(e),
+      Math.sin(e) * r,
+      Math.sin(a) * r * Math.cos(e)
     );
-    const t = (i + 0.5) / 12;
-    c.position.set(-STRAND_LEN / 2 + t * STRAND_LEN, 0.005, 0.05);
-    codonGroup.add(c);
+    largeSubGroup.add(lump);
+    largeLumps.push(lump);
+  }
+  g.add(largeSubGroup);
+  // ===== small (bottom) ribosomal subunit =====
+  const smallSubGroup = new THREE.Group();
+  smallSubGroup.position.y = -0.06;
+  const smallCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.10, 1), smallMat);
+  smallCore.scale.set(1.10, 0.80, 1.00);
+  smallSubGroup.add(smallCore);
+  const smallLumps = [];
+  for (let i = 0; i < 10; i++) {
+    const lump = new THREE.Mesh(new THREE.IcosahedronGeometry(0.022 + Math.random() * 0.018, 0), smallLumpMat);
+    const a = Math.random() * Math.PI * 2;
+    const e = (Math.random() - 0.5) * 1.2;
+    const r = 0.090 + Math.random() * 0.018;
+    lump.position.set(
+      Math.cos(a) * r * Math.cos(e),
+      Math.sin(e) * r * 0.85,
+      Math.sin(a) * r * Math.cos(e)
+    );
+    smallSubGroup.add(lump);
+    smallLumps.push(lump);
+  }
+  g.add(smallSubGroup);
+  // ===== mRNA strand threading the cleft =====
+  const STRAND_LEN = 0.56;
+  function makeStrand(yOff, zOff) {
+    const pts = [];
+    for (let i = 0; i <= 80; i++) {
+      const t = i / 80;
+      pts.push(new THREE.Vector3(
+        -STRAND_LEN / 2 + t * STRAND_LEN,
+        yOff + Math.sin(t * 14) * 0.006,
+        zOff + Math.sin(t * 6) * 0.004
+      ));
+    }
+    return new THREE.CatmullRomCurve3(pts);
+  }
+  const mrnaMat = new THREE.MeshStandardMaterial({ color: 0xff7a55, roughness: 0.5, metalness: 0.05 });
+  const mrnaTube = new THREE.Mesh(new THREE.TubeGeometry(makeStrand(0.012, 0.07), 80, 0.0072, 10, false), mrnaMat);
+  g.add(mrnaTube);
+  // ===== codon triplets (each base as its own small sphere) =====
+  const codonGroup = new THREE.Group();
+  const baseColours = [0x4a89dc, 0xff8c42, 0x6cdb8a, 0xc97cc1];     // A, C, G, U-ish
+  for (let cIdx = 0; cIdx < 14; cIdx++) {
+    const t = (cIdx + 0.5) / 14;
+    const baseX = -STRAND_LEN / 2 + t * STRAND_LEN;
+    // sugar-phosphate backbone offsets (3 bases per codon)
+    for (let b = 0; b < 3; b++) {
+      const bx = baseX - 0.012 + b * 0.012;
+      const bMat = new THREE.MeshStandardMaterial({ color: baseColours[(cIdx + b) % 4], roughness: 0.55 });
+      const base = new THREE.Mesh(new THREE.SphereGeometry(0.0070, 12, 8), bMat);
+      base.position.set(bx, 0.005, 0.07);
+      codonGroup.add(base);
+    }
   }
   g.add(codonGroup);
-  // growing peptide chain extruding out the TOP of the large subunit
+  // ===== tRNA (an "L"-shape entering at the A-site) =====
+  // anticodon stem
+  const tRNAGroup = new THREE.Group();
+  const tRNAStem = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.10, 10), tRNAMat);
+  tRNAStem.position.y = 0.05;
+  tRNAGroup.add(tRNAStem);
+  const tRNAArm = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.08, 10), tRNAMat);
+  tRNAArm.rotation.z = Math.PI / 2;
+  tRNAArm.position.set(0.04, 0.10, 0);
+  tRNAGroup.add(tRNAArm);
+  // amino-acid bead at the acceptor end
+  const aminoAcid = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), new THREE.MeshStandardMaterial({ color: 0xf8e088, roughness: 0.45, emissive: 0x553a08, emissiveIntensity: 0.35 }));
+  aminoAcid.position.set(0.08, 0.10, 0);
+  tRNAGroup.add(aminoAcid);
+  tRNAGroup.position.set(0.02, -0.02, 0.07);
+  g.add(tRNAGroup);
+  // ===== growing peptide chain emerging out the top of the large subunit =====
   const chainBeads = [];
-  const chainMat  = new THREE.MeshStandardMaterial({ color: 0xf8e6a8, roughness: 0.5 });
-  for (let i = 0; i < 12; i++) {
-    const b = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), chainMat);
-    // arrange in a curl coming out the top
-    const a = i * 0.7;
-    b.position.set(Math.cos(a) * 0.03, 0.20 + i * 0.025, Math.sin(a) * 0.03);
+  // chain leaves through a curled "exit tunnel" — beads follow a 3D helix curve
+  const chainCurve = (i) => {
+    const a = i * 0.55;
+    return new THREE.Vector3(
+      Math.cos(a) * (0.04 + i * 0.002),
+      0.22 + i * 0.024,
+      Math.sin(a) * (0.04 + i * 0.002)
+    );
+  };
+  // residue colours (a tiny palette of amino-acid-coloured beads)
+  const residueColours = [0xf8e088, 0xc97c6a, 0x9bc274, 0xf6c0ce, 0x8ec1d6, 0xe2c485];
+  for (let i = 0; i < 14; i++) {
+    const b = new THREE.Mesh(
+      new THREE.SphereGeometry(0.020, 18, 12),
+      new THREE.MeshStandardMaterial({ color: residueColours[i % residueColours.length], roughness: 0.5 })
+    );
+    b.position.copy(chainCurve(i));
     b.visible = false;
-    chainBeads.push(b);
     g.add(b);
+    chainBeads.push(b);
   }
+  // E / P / A site labels (small floating tags)
   let t = 0;
   return {
     group: g,
     update(dt) {
       t += dt;
-      // peptide chain grows then resets (cycle ~6s)
-      const phase = (t % 6.0) / 6.0;
+      // peptide chain grows then resets (cycle ~7s)
+      const phase = (t % 7.0) / 7.0;
       const grown = Math.floor(phase * (chainBeads.length + 2));
-      for (let i = 0; i < chainBeads.length; i++) {
-        chainBeads[i].visible = i < grown;
-      }
-      // mRNA + codons slide to the left (continuous translation)
-      const slide = -(t * 0.04) % 0.04;
+      for (let i = 0; i < chainBeads.length; i++) chainBeads[i].visible = i < grown;
+      // mRNA + codons slide along the tube (continuous translation)
+      const slide = -((t * 0.05) % 0.04);
       mrnaTube.position.x = slide;
       codonGroup.position.x = slide;
+      // tRNA bobs slightly (charged tRNA wiggling)
+      tRNAGroup.position.y = -0.02 + Math.sin(t * 4) * 0.006;
       // gentle ribosome breathing
-      const breath = 1 + Math.sin(t * 1.6) * 0.012;
-      largeSub.scale.set(1.05 * breath, 0.95 * breath, 0.95 * breath);
-      smallSub.scale.set(1.05 * breath, 0.85 * breath, 0.95 * breath);
+      const breath = 1 + Math.sin(t * 1.5) * 0.010;
+      largeSubGroup.scale.setScalar(breath);
+      smallSubGroup.scale.setScalar(breath);
     }
   };
 }
@@ -4746,69 +4994,140 @@ function buildDemoRibosome() {
 // ---- 3. Antibody binding to a tumour-cell receptor ----
 function buildDemoAntibody() {
   const g = new THREE.Group();
-  // big translucent cell (right side)
-  const cellMat = new THREE.MeshStandardMaterial({ color: 0xa57acc, roughness: 0.55, transparent: true, opacity: 0.55 });
-  const cell = new THREE.Mesh(new THREE.SphereGeometry(0.20, 36, 28), cellMat);
-  cell.position.set(0.18, 0, 0);
+  // ===== Cell with a phospholipid bilayer surface =====
+  const outerMembraneMat = new THREE.MeshStandardMaterial({ color: 0xc7a5e6, roughness: 0.55, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  const innerMembraneMat = new THREE.MeshStandardMaterial({ color: 0xb18cd2, roughness: 0.55, transparent: true, opacity: 0.40, side: THREE.DoubleSide });
+  const cytoMat = new THREE.MeshStandardMaterial({ color: 0xa57acc, roughness: 0.7, transparent: true, opacity: 0.32 });
+  const cell = new THREE.Group();
+  cell.position.set(0.22, 0, 0);
+  // outer + inner leaflets to suggest a lipid bilayer
+  const outerLeaflet = new THREE.Mesh(new THREE.SphereGeometry(0.22, 48, 32), outerMembraneMat);
+  cell.add(outerLeaflet);
+  const innerLeaflet = new THREE.Mesh(new THREE.SphereGeometry(0.213, 44, 30), innerMembraneMat);
+  cell.add(innerLeaflet);
+  // cytoplasm hint
+  const cytoplasm = new THREE.Mesh(new THREE.SphereGeometry(0.195, 36, 28), cytoMat);
+  cell.add(cytoplasm);
+  // nucleus
+  const nucleusMat = new THREE.MeshStandardMaterial({ color: 0x6d4a99, roughness: 0.6, transparent: true, opacity: 0.55 });
+  const nucleus = new THREE.Mesh(new THREE.SphereGeometry(0.085, 32, 22), nucleusMat);
+  nucleus.position.set(0.05, -0.02, 0.04);
+  cell.add(nucleus);
+  // surface phospholipid "heads" — small spheres dotting the membrane
+  const phosphoMat = new THREE.MeshStandardMaterial({ color: 0xebd6f5, roughness: 0.4, metalness: 0.05 });
+  for (let i = 0; i < 60; i++) {
+    const u = Math.random() * Math.PI * 2;
+    const v = Math.acos(2 * Math.random() - 1);
+    const r = 0.222;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.005, 8, 6), phosphoMat);
+    head.position.set(Math.sin(v) * Math.cos(u) * r, Math.cos(v) * r, Math.sin(v) * Math.sin(u) * r);
+    cell.add(head);
+  }
   g.add(cell);
-  // receptors on cell surface (small stalks)
-  const recMat = new THREE.MeshStandardMaterial({ color: 0x5b4a8a, roughness: 0.5 });
+  // ===== Receptors poking through the membrane =====
+  const recMat   = new THREE.MeshStandardMaterial({ color: 0x4f3c7a, roughness: 0.4, metalness: 0.15 });
+  const recHeadMat = new THREE.MeshStandardMaterial({ color: 0x7e63b8, roughness: 0.4, metalness: 0.15 });
+  const intraMat = new THREE.MeshStandardMaterial({ color: 0x3a2c5e, roughness: 0.5 });
   const receptors = [];
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 1.4 - 0.7;
-    const rec = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.06, 10), recMat);
-    const rx = 0.18 + Math.cos(a) * 0.20;
-    const rz = Math.sin(a) * 0.20;
-    rec.position.set(rx, 0.02, rz);
-    rec.lookAt(rx * 1.5, 0.03, rz * 1.5);
-    rec.rotateX(Math.PI / 2);
-    receptors.push(rec);
-    g.add(rec);
-    // ligand-binding head on the receptor
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), recMat);
-    head.position.copy(rec.position);
-    head.position.x += Math.cos(a) * 0.04;
-    head.position.z += Math.sin(a) * 0.04;
-    g.add(head);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 1.5 - 0.6;
+    const cellWorldX = 0.22, cellWorldY = 0, cellWorldZ = 0;
+    const nx = Math.cos(a), ny = 0, nz = Math.sin(a);
+    // transmembrane stalk — sits inside the membrane shell
+    const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.10, 10), recMat);
+    stalk.position.set(cellWorldX + nx * 0.215, 0.02, cellWorldZ + nz * 0.215);
+    stalk.lookAt(cellWorldX + nx * 2, 0.04, cellWorldZ + nz * 2);
+    stalk.rotateX(Math.PI / 2);
+    g.add(stalk);
+    receptors.push(stalk);
+    // extracellular receptor head (the antigen-binding site)
+    const ecdMain = new THREE.Mesh(new THREE.SphereGeometry(0.022, 18, 14), recHeadMat);
+    ecdMain.position.set(cellWorldX + nx * 0.275, 0.04, cellWorldZ + nz * 0.275);
+    g.add(ecdMain);
+    const ecdTip = new THREE.Mesh(new THREE.SphereGeometry(0.014, 14, 10), recHeadMat);
+    ecdTip.position.set(cellWorldX + nx * 0.31, 0.058, cellWorldZ + nz * 0.31);
+    g.add(ecdTip);
+    // intracellular tail
+    const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.05, 8), intraMat);
+    tail.position.set(cellWorldX + nx * 0.165, 0.0, cellWorldZ + nz * 0.165);
+    tail.lookAt(cellWorldX, 0.0, cellWorldZ);
+    tail.rotateX(Math.PI / 2);
+    g.add(tail);
   }
-  // Y-shaped antibody (left side, approaching)
+  // ===== Antibody (proper IgG: 2 heavy + 2 light chains, hinge, glycans) =====
   const ab = new THREE.Group();
-  const abMat = new THREE.MeshStandardMaterial({ color: 0xe6d56a, roughness: 0.45 });
-  // base/stem of the Y (the Fc region)
-  const fc = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.020, 0.08, 12), abMat);
-  fc.position.y = -0.04;
-  ab.add(fc);
-  // two Fab arms (the Y branches)
-  for (const sgn of [-1, +1]) {
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.10, 10), abMat);
-    arm.position.set(sgn * 0.035, 0.04, 0);
-    arm.rotation.z = sgn * -0.6;
-    ab.add(arm);
-    // Fab tip
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.02, 12, 10), abMat);
-    tip.position.set(sgn * 0.07, 0.085, 0);
-    ab.add(tip);
+  const heavyMat = new THREE.MeshStandardMaterial({ color: 0xe6c83d, roughness: 0.42, metalness: 0.12 });
+  const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff0a0, roughness: 0.42, metalness: 0.12 });
+  const glycanMat = new THREE.MeshStandardMaterial({ color: 0x7ec1a2, roughness: 0.4 });
+  const ssMat = new THREE.MeshStandardMaterial({ color: 0xd8a23a, roughness: 0.5, metalness: 0.5 });
+  // Fc region — two parallel cylinders for the two CH3 domains
+  for (const dx of [-0.011, 0.011]) {
+    const ch3 = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.05, 14), heavyMat);
+    ch3.position.set(dx, -0.06, 0);
+    ab.add(ch3);
+    const ch2 = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.05, 14), heavyMat);
+    ch2.position.set(dx, -0.015, 0);
+    ab.add(ch2);
+    // a single glycan blob hanging off each CH2
+    const gly = new THREE.Mesh(new THREE.SphereGeometry(0.011, 12, 10), glycanMat);
+    gly.position.set(dx, -0.015, 0.022);
+    ab.add(gly);
   }
-  ab.position.set(-0.30, 0, 0);
+  // hinge region — short flexible neck with two interchain disulfide bonds
+  const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.022, 18, 14), heavyMat);
+  hinge.position.y = 0.018;
+  ab.add(hinge);
+  for (const sgn of [-1, 1]) {
+    const ss = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.018, 6), ssMat);
+    ss.position.set(sgn * 0.006, 0.018, 0);
+    ab.add(ss);
+  }
+  // Two Fab arms — each is (heavy chain) cylinder + (light chain) cylinder
+  for (const sgn of [-1, 1]) {
+    const arm = new THREE.Group();
+    // CH1 (heavy)
+    const ch1 = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.013, 0.06, 12), heavyMat);
+    ch1.position.set(0, 0.035, -0.005);
+    arm.add(ch1);
+    // VH (heavy variable)
+    const vh = new THREE.Mesh(new THREE.SphereGeometry(0.016, 18, 14), heavyMat);
+    vh.position.set(0, 0.075, -0.008);
+    arm.add(vh);
+    // CL (light)
+    const cl = new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.011, 0.05, 12), lightMat);
+    cl.position.set(0, 0.040, 0.012);
+    arm.add(cl);
+    // VL (light variable)
+    const vl = new THREE.Mesh(new THREE.SphereGeometry(0.014, 16, 12), lightMat);
+    vl.position.set(0, 0.075, 0.015);
+    arm.add(vl);
+    // CDR loops at the tip — the actual antigen-binding paratope
+    const cdr = new THREE.Mesh(new THREE.SphereGeometry(0.010, 12, 10), new THREE.MeshStandardMaterial({ color: 0xffcd4a, roughness: 0.35, emissive: 0x3a2200, emissiveIntensity: 0.4 }));
+    cdr.position.set(0, 0.095, 0.005);
+    arm.add(cdr);
+    arm.position.set(sgn * 0.030, 0.025, 0);
+    arm.rotation.z = sgn * -0.55;
+    ab.add(arm);
+  }
+  ab.position.set(-0.30, 0.04, 0);
   g.add(ab);
   let t = 0;
   return {
     group: g,
     update(dt) {
       t += dt;
-      // approach + bind cycle (~6s loop)
-      const phase = (t % 6.0) / 6.0;
+      // approach + bind cycle (~7s loop)
+      const phase = (t % 7.0) / 7.0;
       let p;
-      if (phase < 0.35) p = phase / 0.35;
-      else if (phase < 0.60) p = 1.0;
-      else if (phase < 0.85) p = 1.0 - (phase - 0.60) / 0.25 * 0.2;  // small recoil
-      else p = 1.0 - (phase - 0.85) / 0.15;
-      // antibody approaches the topmost receptor (i=2 area)
-      ab.position.x = THREE.MathUtils.lerp(-0.30, 0.00, p);
-      ab.position.y = THREE.MathUtils.lerp(0.18, 0.10, p);
-      ab.rotation.z = THREE.MathUtils.lerp(-0.35, 0.0, p);
-      // cell breathes
-      cell.scale.setScalar(1 + Math.sin(t * 1.4) * 0.015);
+      if (phase < 0.40) p = phase / 0.40;
+      else if (phase < 0.65) p = 1.0;
+      else if (phase < 0.88) p = 1.0 - (phase - 0.65) / 0.23 * 0.10;
+      else p = 1.0 - (phase - 0.88) / 0.12;
+      ab.position.x = THREE.MathUtils.lerp(-0.34, 0.05, p);
+      ab.position.y = THREE.MathUtils.lerp(0.22, 0.10, p);
+      ab.rotation.z = THREE.MathUtils.lerp(-0.45, -0.05, p);
+      ab.rotation.y = Math.sin(t * 0.7) * 0.05;
+      cell.scale.setScalar(1 + Math.sin(t * 1.4) * 0.012);
     }
   };
 }
@@ -4816,86 +5135,145 @@ function buildDemoAntibody() {
 // ---- 4. CAR-T cell killing a tumour cell ----
 function buildDemoCART() {
   const g = new THREE.Group();
-  // big tumour cell (right)
-  const tumMat = new THREE.MeshStandardMaterial({ color: 0xc77676, roughness: 0.55, transparent: true, opacity: 0.78 });
-  const tumour = new THREE.Mesh(new THREE.SphereGeometry(0.22, 36, 28), tumMat);
-  tumour.position.set(0.20, 0, 0);
-  g.add(tumour);
-  // antigen on tumour surface
-  const antigenMat = new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.5, emissive: 0x402a05, emissiveIntensity: 0.4 });
-  const antigen = new THREE.Mesh(new THREE.SphereGeometry(0.022, 14, 12), antigenMat);
-  antigen.position.set(0.0, 0.02, 0.0);
-  g.add(antigen);
-  // smaller T-cell (left)
-  const tcellMat = new THREE.MeshStandardMaterial({ color: 0x6ec0a8, roughness: 0.5 });
-  const tcell = new THREE.Mesh(new THREE.SphereGeometry(0.13, 28, 22), tcellMat);
-  tcell.position.set(-0.35, 0.05, 0);
-  g.add(tcell);
-  // CAR receptor "spikes" on the T-cell
-  const carMat = new THREE.MeshStandardMaterial({ color: 0x2a6c5a, roughness: 0.5 });
-  const cars = [];
-  for (let i = 0; i < 5; i++) {
-    const a = -0.6 + i * 0.3;
-    const car = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.04, 8), carMat);
-    car.position.set(tcell.position.x + Math.cos(a) * 0.14, 0.05 + Math.sin(a * 0.5) * 0.04, Math.sin(a) * 0.14);
-    car.lookAt(car.position.x + Math.cos(a), 0.05, Math.sin(a));
-    car.rotateX(Math.PI / 2);
-    cars.push(car);
-    g.add(car);
+  // ===== Tumour cell (right) — translucent shell with nucleus + uneven surface =====
+  const tumOuterMat = new THREE.MeshStandardMaterial({ color: 0xd07c84, roughness: 0.55, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  const tumInnerMat = new THREE.MeshStandardMaterial({ color: 0xb05a64, roughness: 0.6, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+  const tumNucMat   = new THREE.MeshStandardMaterial({ color: 0x6e3036, roughness: 0.6, transparent: true, opacity: 0.55 });
+  const tumour = new THREE.Group();
+  tumour.position.set(0.22, 0, 0);
+  // membrane shells (bilayer)
+  const tumOuter = new THREE.Mesh(new THREE.SphereGeometry(0.23, 48, 32), tumOuterMat);
+  tumour.add(tumOuter);
+  const tumInner = new THREE.Mesh(new THREE.SphereGeometry(0.222, 44, 30), tumInnerMat);
+  tumour.add(tumInner);
+  // nucleus
+  const tumNucleus = new THREE.Mesh(new THREE.SphereGeometry(0.10, 32, 22), tumNucMat);
+  tumNucleus.position.set(-0.04, -0.03, 0.04);
+  tumour.add(tumNucleus);
+  // dotted antigens covering the tumour surface (gold spheres)
+  const antigenMat = new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.4, emissive: 0x402a05, emissiveIntensity: 0.4, metalness: 0.15 });
+  const antigens = [];
+  for (let i = 0; i < 24; i++) {
+    const u = Math.random() * Math.PI * 2;
+    const v = Math.acos(2 * Math.random() - 1);
+    const ag = new THREE.Mesh(new THREE.SphereGeometry(0.011, 12, 10), antigenMat);
+    ag.position.set(Math.sin(v) * Math.cos(u) * 0.232, Math.cos(v) * 0.232, Math.sin(v) * Math.sin(u) * 0.232);
+    tumour.add(ag);
+    antigens.push(ag);
   }
-  // granules (released perforin/granzyme spheres)
-  const granuleMat = new THREE.MeshStandardMaterial({ color: 0xffe186, roughness: 0.4, emissive: 0x553300, emissiveIntensity: 0.5 });
+  g.add(tumour);
+  // ===== T-cell (left) — smaller, with surface ruffles & CAR receptors =====
+  const tcellOuter = new THREE.MeshStandardMaterial({ color: 0x8ad6bd, roughness: 0.55, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
+  const tcellInner = new THREE.MeshStandardMaterial({ color: 0x60b89e, roughness: 0.6, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+  const tcellNucMat = new THREE.MeshStandardMaterial({ color: 0x2e7062, roughness: 0.6, transparent: true, opacity: 0.55 });
+  const tcell = new THREE.Group();
+  tcell.position.set(-0.35, 0.05, 0);
+  const tcellOuterMesh = new THREE.Mesh(new THREE.SphereGeometry(0.155, 44, 30), tcellOuter);
+  tcell.add(tcellOuterMesh);
+  tcell.add(new THREE.Mesh(new THREE.SphereGeometry(0.148, 40, 28), tcellInner));
+  // small surface ruffles
+  for (let i = 0; i < 18; i++) {
+    const u = Math.random() * Math.PI * 2;
+    const v = Math.acos(2 * Math.random() - 1);
+    const r = 0.155;
+    const ruff = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), tcellInner);
+    ruff.position.set(Math.sin(v) * Math.cos(u) * r, Math.cos(v) * r, Math.sin(v) * Math.sin(u) * r);
+    tcell.add(ruff);
+  }
+  const tcellNucleus = new THREE.Mesh(new THREE.SphereGeometry(0.068, 28, 20), tcellNucMat);
+  tcellNucleus.position.set(0.03, 0, -0.03);
+  tcell.add(tcellNucleus);
+  g.add(tcell);
+  // ===== CAR receptors — small "Y" shapes on the T-cell surface =====
+  const carMat = new THREE.MeshStandardMaterial({ color: 0x2a6c5a, roughness: 0.45, metalness: 0.1 });
+  const carHeadMat = new THREE.MeshStandardMaterial({ color: 0x42a386, roughness: 0.45, metalness: 0.1 });
+  const cars = [];
+  const carStubs = [];
+  for (let i = 0; i < 7; i++) {
+    const a = -0.7 + i * 0.25;
+    const carG = new THREE.Group();
+    const nx = Math.cos(a), ny = 0, nz = Math.sin(a);
+    // transmembrane stub
+    const stub = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.04, 8), carMat);
+    stub.lookAt(nx, 0, nz);
+    stub.rotateX(Math.PI / 2);
+    stub.position.set(nx * 0.175, 0, nz * 0.175);
+    carG.add(stub);
+    // Y-arms (the scFv binding the antigen)
+    for (const sgn of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.006, 0.025, 8), carHeadMat);
+      arm.position.set(nx * 0.205 + sgn * nz * 0.006, 0.012, nz * 0.205 - sgn * nx * 0.006);
+      arm.lookAt(nx, 0.04, nz);
+      arm.rotateX(Math.PI / 2);
+      arm.rotateZ(sgn * 0.5);
+      carG.add(arm);
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.008, 10, 8), carHeadMat);
+      tip.position.set(nx * 0.225 + sgn * nz * 0.012, 0.022, nz * 0.225 - sgn * nx * 0.012);
+      carG.add(tip);
+    }
+    tcell.add(carG);
+    cars.push(carG);
+    carStubs.push(stub);
+  }
+  // ===== cytotoxic granules =====
+  const granuleMat = new THREE.MeshStandardMaterial({ color: 0xffe186, roughness: 0.35, emissive: 0x553300, emissiveIntensity: 0.5, metalness: 0.05 });
   const granules = [];
-  for (let i = 0; i < 8; i++) {
-    const gr = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), granuleMat);
+  for (let i = 0; i < 14; i++) {
+    const gr = new THREE.Mesh(new THREE.SphereGeometry(0.013, 14, 10), granuleMat);
     gr.visible = false;
-    gr.userData.basePos = new THREE.Vector3();
     granules.push(gr);
     g.add(gr);
   }
+  // immune synapse flash (pancake between T-cell + tumour)
+  const synapseMat = new THREE.MeshBasicMaterial({ color: 0xffe070, transparent: true, opacity: 0 });
+  const synapse = new THREE.Mesh(new THREE.CircleGeometry(0.10, 24), synapseMat);
+  synapse.rotation.y = Math.PI / 2;
+  g.add(synapse);
   let t = 0;
   return {
     group: g,
     update(dt) {
       t += dt;
-      const phase = (t % 8.0) / 8.0;   // 8s cycle
-      // 0.0-0.30 → T-cell approaches; 0.30-0.55 → docks; 0.55-0.85 → granules fly; 0.85-1.0 → tumour shrinks/explodes
+      const phase = (t % 9.0) / 9.0;
       if (phase < 0.30) {
         const p = phase / 0.30;
-        tcell.position.x = THREE.MathUtils.lerp(-0.40, -0.10, p);
-        for (let i = 0; i < cars.length; i++) {
-          const a = -0.6 + i * 0.3;
-          cars[i].position.x = tcell.position.x + Math.cos(a) * 0.14;
-        }
+        tcell.position.x = THREE.MathUtils.lerp(-0.45, -0.10, p);
         for (const gr of granules) gr.visible = false;
         tumour.scale.setScalar(1.0);
-      } else if (phase < 0.55) {
+        tumOuterMat.opacity = 0.55; tumInnerMat.opacity = 0.45;
+        synapseMat.opacity = 0;
+      } else if (phase < 0.50) {
+        // docked — synapse forms
         tcell.position.x = -0.10;
-        for (let i = 0; i < cars.length; i++) {
-          const a = -0.6 + i * 0.3;
-          cars[i].position.x = tcell.position.x + Math.cos(a) * 0.14;
-        }
-        for (const gr of granules) gr.visible = false;
-      } else if (phase < 0.85) {
-        // granules fly from T-cell to tumour
-        const p = (phase - 0.55) / 0.30;
+        const sp = (phase - 0.30) / 0.20;
+        synapse.position.set(0.06, 0.02, 0);
+        synapseMat.opacity = sp * 0.7;
+      } else if (phase < 0.80) {
+        // granules fly along the synapse axis from T-cell to tumour
+        const p = (phase - 0.50) / 0.30;
         for (let i = 0; i < granules.length; i++) {
           const gr = granules[i];
           gr.visible = true;
-          const ang = (i / granules.length) * Math.PI * 2;
-          const startX = -0.10 + Math.cos(ang) * 0.05;
-          const startY = 0.05 + Math.sin(ang) * 0.05;
-          const endX = 0.20;
-          const endY = Math.sin(ang) * 0.18;
-          gr.position.x = THREE.MathUtils.lerp(startX, endX, p);
-          gr.position.y = THREE.MathUtils.lerp(startY, endY, p);
-          gr.position.z = Math.cos(ang) * 0.18 * p;
+          const u = i / granules.length;
+          const ang = u * Math.PI * 2;
+          const startX = -0.05 + Math.cos(ang) * 0.04;
+          const startY = 0.04 + Math.sin(ang) * 0.04;
+          const startZ = Math.cos(ang * 1.4) * 0.04;
+          const endX = 0.18;
+          const endY = Math.sin(ang) * 0.16;
+          const endZ = Math.cos(ang) * 0.16;
+          const pp = Math.min(1, p * (0.8 + (i % 4) * 0.05));
+          gr.position.x = THREE.MathUtils.lerp(startX, endX, pp);
+          gr.position.y = THREE.MathUtils.lerp(startY, endY, pp);
+          gr.position.z = THREE.MathUtils.lerp(startZ, endZ, pp);
         }
+        synapseMat.opacity = 0.7 * (1 - p);
       } else {
-        // tumour deflates
-        const p = (phase - 0.85) / 0.15;
-        tumour.scale.setScalar(1.0 - p * 0.45);
-        tumMat.opacity = 0.78 * (1 - p * 0.6);
+        // tumour deflates + fades
+        const p = (phase - 0.80) / 0.20;
+        tumour.scale.setScalar(1.0 - p * 0.40);
+        tumOuterMat.opacity = 0.55 * (1 - p * 0.7);
+        tumInnerMat.opacity = 0.45 * (1 - p * 0.7);
         for (const gr of granules) gr.visible = false;
       }
     }
@@ -4905,87 +5283,154 @@ function buildDemoCART() {
 // ---- 5. CRISPR-Cas9 cutting DNA ----
 function buildDemoCRISPR() {
   const g = new THREE.Group();
-  // DNA double helix
+  // ===== DNA double helix — two phosphate backbones + base-pair rungs =====
   const dna = new THREE.Group();
-  const helixMat = new THREE.MeshStandardMaterial({ color: 0x6a8ed8, roughness: 0.6 });
-  const helixMat2 = new THREE.MeshStandardMaterial({ color: 0xc06868, roughness: 0.6 });
-  const rungMat   = new THREE.MeshStandardMaterial({ color: 0xa0a0a8, roughness: 0.5 });
-  const TURNS = 6;
-  const STEP  = 0.04;
-  const RAD   = 0.05;
-  const STRAND_RES = 24;
-  const totalLen = TURNS * 4 * STEP;     // 4 base-pairs per turn approximated
+  const backbone1Mat = new THREE.MeshStandardMaterial({ color: 0x4a78c8, roughness: 0.45, metalness: 0.15 });
+  const backbone2Mat = new THREE.MeshStandardMaterial({ color: 0xc05c5c, roughness: 0.45, metalness: 0.15 });
+  // base colours: A=blue, T=red, G=green, C=yellow (Watson-Crick pairs A-T, G-C)
+  const baseAMat = new THREE.MeshStandardMaterial({ color: 0x3577d4, roughness: 0.55 });
+  const baseTMat = new THREE.MeshStandardMaterial({ color: 0xd05050, roughness: 0.55 });
+  const baseGMat = new THREE.MeshStandardMaterial({ color: 0x4caf6d, roughness: 0.55 });
+  const baseCMat = new THREE.MeshStandardMaterial({ color: 0xe5c440, roughness: 0.55 });
+  const baseColours = [
+    [baseAMat, baseTMat], [baseTMat, baseAMat],
+    [baseGMat, baseCMat], [baseCMat, baseGMat]
+  ];
+  const TURNS = 5;
+  const RUNGS_PER_TURN = 10;
+  const TOTAL_RUNGS = TURNS * RUNGS_PER_TURN;
+  const RAD = 0.06;
+  const STEP = 0.022;
+  const totalLen = TOTAL_RUNGS * STEP;
   function buildStrand(phaseShift, mat) {
     const pts = [];
-    for (let i = 0; i <= STRAND_RES * TURNS; i++) {
-      const u = i / (STRAND_RES * TURNS);
+    const STRAND_RES = 200;
+    for (let i = 0; i <= STRAND_RES; i++) {
+      const u = i / STRAND_RES;
       const a = u * TURNS * Math.PI * 2 + phaseShift;
       pts.push(new THREE.Vector3(-totalLen/2 + u * totalLen, Math.cos(a) * RAD, Math.sin(a) * RAD));
     }
     const curve = new THREE.CatmullRomCurve3(pts);
-    return new THREE.Mesh(new THREE.TubeGeometry(curve, STRAND_RES * TURNS, 0.010, 8, false), mat);
+    return new THREE.Mesh(new THREE.TubeGeometry(curve, STRAND_RES, 0.010, 10, false), mat);
   }
-  const strand1 = buildStrand(0,         helixMat);
-  const strand2 = buildStrand(Math.PI,   helixMat2);
+  const strand1 = buildStrand(0,       backbone1Mat);
+  const strand2 = buildStrand(Math.PI, backbone2Mat);
   dna.add(strand1);
   dna.add(strand2);
-  // base-pair rungs
-  const rungSteps = TURNS * 4;
-  for (let i = 0; i <= rungSteps; i++) {
-    const u = i / rungSteps;
+  // base-pair rungs (each rung = two halves coloured by their base)
+  for (let i = 0; i <= TOTAL_RUNGS; i++) {
+    const u = i / TOTAL_RUNGS;
     const a = u * TURNS * Math.PI * 2;
-    const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, RAD * 2, 6), rungMat);
-    rung.position.set(-totalLen/2 + u * totalLen, 0, 0);
-    rung.rotation.z = Math.PI / 2;
-    rung.rotation.x = a;
-    dna.add(rung);
+    const [matA, matB] = baseColours[i % baseColours.length];
+    const baseA = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, RAD, 8), matA);
+    const baseB = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, RAD, 8), matB);
+    baseA.position.set(-totalLen/2 + u * totalLen, RAD/2 * Math.cos(a), RAD/2 * Math.sin(a));
+    baseB.position.set(-totalLen/2 + u * totalLen, -RAD/2 * Math.cos(a), -RAD/2 * Math.sin(a));
+    baseA.lookAt(baseA.position.x, 0, 0);
+    baseA.rotateX(Math.PI / 2);
+    baseB.lookAt(baseB.position.x, 0, 0);
+    baseB.rotateX(Math.PI / 2);
+    dna.add(baseA);
+    dna.add(baseB);
+  }
+  // PAM site — three highlighted base pairs near the cut location
+  const pamMat = new THREE.MeshStandardMaterial({ color: 0xff8e1f, roughness: 0.45, emissive: 0x3a1d04, emissiveIntensity: 0.4 });
+  for (let i = 0; i < 3; i++) {
+    const u = 0.5 + (i + 1) * 0.011 / totalLen;
+    const a = u * TURNS * Math.PI * 2;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(RAD * 1.05, 0.005, 8, 18), pamMat);
+    ring.position.set(-totalLen/2 + u * totalLen, 0, 0);
+    ring.rotation.y = Math.PI / 2;
+    dna.add(ring);
   }
   g.add(dna);
-
-  // Cas9 blob
+  // ===== Cas9 — multi-lobed (REC + HNH + RuvC) =====
   const cas9 = new THREE.Group();
-  const cas9Mat = new THREE.MeshStandardMaterial({ color: 0x9bb87a, roughness: 0.65, flatShading: true });
-  const cas9Body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.10, 1), cas9Mat);
-  cas9.add(cas9Body);
-  // guide RNA (small curved tube sticking out)
-  const grnaPts = [];
-  for (let i = 0; i <= 20; i++) {
-    const u = i / 20;
-    grnaPts.push(new THREE.Vector3(-u * 0.10, 0.02 - u * 0.04, -u * 0.04));
+  const cas9Mat   = new THREE.MeshStandardMaterial({ color: 0xa3c97f, roughness: 0.6, flatShading: true });
+  const cas9Mat2  = new THREE.MeshStandardMaterial({ color: 0x86b16a, roughness: 0.6, flatShading: true });
+  const cas9Mat3  = new THREE.MeshStandardMaterial({ color: 0xc7d99b, roughness: 0.6, flatShading: true });
+  // REC lobe — bigger top blob
+  const rec = new THREE.Mesh(new THREE.IcosahedronGeometry(0.085, 1), cas9Mat);
+  rec.scale.set(1.1, 0.9, 0.9);
+  rec.position.y = 0.04;
+  cas9.add(rec);
+  // HNH lobe — front side
+  const hnh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.045, 1), cas9Mat2);
+  hnh.position.set(0.05, -0.02, 0.04);
+  cas9.add(hnh);
+  // RuvC lobe — back side
+  const ruvC = new THREE.Mesh(new THREE.IcosahedronGeometry(0.05, 1), cas9Mat3);
+  ruvC.position.set(-0.05, -0.02, -0.03);
+  cas9.add(ruvC);
+  // smaller surface bumps (rRNA-protein contact patches)
+  for (let i = 0; i < 10; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const e = (Math.random() - 0.5) * 1.4;
+    const r = 0.07 + Math.random() * 0.015;
+    const bump = new THREE.Mesh(new THREE.IcosahedronGeometry(0.015 + Math.random() * 0.015, 0), cas9Mat);
+    bump.position.set(Math.cos(a) * r * Math.cos(e), 0.02 + Math.sin(e) * r * 0.8, Math.sin(a) * r * Math.cos(e));
+    cas9.add(bump);
   }
-  const grnaCurve = new THREE.CatmullRomCurve3(grnaPts);
-  const grna = new THREE.Mesh(new THREE.TubeGeometry(grnaCurve, 20, 0.006, 6, false), new THREE.MeshStandardMaterial({ color: 0xd0a3e0, roughness: 0.6 }));
-  cas9.add(grna);
-  cas9.position.set(0, 0.18, 0);
+  // ===== Guide RNA — emerging from Cas9, with the spacer base-paired to DNA =====
+  const gRNAMat = new THREE.MeshStandardMaterial({ color: 0xd0a3e0, roughness: 0.5, metalness: 0.05 });
+  // scaffold (loops on top of Cas9)
+  const scaffoldPts = [];
+  for (let i = 0; i <= 30; i++) {
+    const u = i / 30;
+    const a = u * Math.PI * 4;
+    scaffoldPts.push(new THREE.Vector3(0.04 * Math.sin(a) - 0.03, 0.075 + u * 0.04, 0.02 * Math.cos(a)));
+  }
+  const scaffold = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(scaffoldPts), 30, 0.0055, 6, false), gRNAMat);
+  cas9.add(scaffold);
+  // spacer arm (descends toward the DNA target)
+  const spacerPts = [];
+  for (let i = 0; i <= 30; i++) {
+    const u = i / 30;
+    spacerPts.push(new THREE.Vector3(-0.005 + u * 0.005, -0.025 - u * 0.04, u * 0.02));
+  }
+  const spacer = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(spacerPts), 30, 0.0055, 6, false), gRNAMat);
+  cas9.add(spacer);
+  cas9.position.set(0, 0.20, 0);
   g.add(cas9);
-
+  // ===== Cut indicator (red flash where the snip happens) =====
+  const cutMat = new THREE.MeshBasicMaterial({ color: 0xff5050, transparent: true, opacity: 0 });
+  const cutFlash = new THREE.Mesh(new THREE.PlaneGeometry(0.015, RAD * 2.4), cutMat);
+  cutFlash.position.set(0, 0, 0);
+  g.add(cutFlash);
   let t = 0;
   return {
     group: g,
     update(dt) {
       t += dt;
-      const phase = (t % 7.0) / 7.0;
-      // 0-0.4 approach; 0.4-0.6 docked; 0.6-0.75 snip (split strands); 0.75-1.0 reset
-      if (phase < 0.4) {
-        const p = phase / 0.4;
-        cas9.position.y = THREE.MathUtils.lerp(0.22, 0.06, p);
-        cas9.position.x = THREE.MathUtils.lerp(-0.04, 0.0, p);
-      } else if (phase < 0.6) {
-        cas9.position.set(0.0, 0.06, 0.0);
-      } else if (phase < 0.75) {
-        // visualise the cut: split the DNA into two halves with a small gap
-        const p = (phase - 0.60) / 0.15;
-        strand1.position.x = -p * 0.04;
-        strand2.position.x = -p * 0.04;
-      } else {
-        // reset gap + retract Cas9
+      const phase = (t % 8.0) / 8.0;
+      if (phase < 0.35) {
+        const p = phase / 0.35;
+        cas9.position.y = THREE.MathUtils.lerp(0.26, 0.08, p);
+        cas9.position.x = THREE.MathUtils.lerp(-0.05, 0.0, p);
         strand1.position.x = 0;
         strand2.position.x = 0;
-        const p = (phase - 0.75) / 0.25;
-        cas9.position.y = THREE.MathUtils.lerp(0.06, 0.22, p);
+        cutMat.opacity = 0;
+      } else if (phase < 0.55) {
+        cas9.position.set(0.0, 0.08, 0.0);
+        cutMat.opacity = 0;
+      } else if (phase < 0.62) {
+        // snip flash
+        const p = (phase - 0.55) / 0.07;
+        cutMat.opacity = 0.9 * (1 - Math.abs(p - 0.5) * 2);
+      } else if (phase < 0.85) {
+        // strands separate
+        const p = (phase - 0.62) / 0.23;
+        strand1.position.x = -p * 0.05;
+        strand2.position.x = -p * 0.05;
+        cutMat.opacity = 0;
+      } else {
+        // reset
+        strand1.position.x = 0;
+        strand2.position.x = 0;
+        const p = (phase - 0.85) / 0.15;
+        cas9.position.y = THREE.MathUtils.lerp(0.08, 0.26, p);
       }
-      // slow DNA spin around its long axis for visual interest
-      dna.rotation.x = t * 0.4;
+      dna.rotation.x = t * 0.35;
     }
   };
 }
@@ -4993,42 +5438,105 @@ function buildDemoCRISPR() {
 // ---- 6. Antibody-drug conjugate (ADC) internalisation ----
 function buildDemoADC() {
   const g = new THREE.Group();
-  // cell
-  const cellMat = new THREE.MeshStandardMaterial({ color: 0xa6cbd2, roughness: 0.6, transparent: true, opacity: 0.65 });
-  const cell = new THREE.Mesh(new THREE.SphereGeometry(0.23, 40, 28), cellMat);
-  cell.position.set(0.10, 0, 0);
+  // ===== Cell with bilayer membrane + nucleus =====
+  const outerMat = new THREE.MeshStandardMaterial({ color: 0xc3dee2, roughness: 0.55, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  const innerMat = new THREE.MeshStandardMaterial({ color: 0x9cc1c6, roughness: 0.6, transparent: true, opacity: 0.40, side: THREE.DoubleSide });
+  const cytoMat  = new THREE.MeshStandardMaterial({ color: 0xa6cbd2, roughness: 0.7, transparent: true, opacity: 0.30 });
+  const cell = new THREE.Group();
+  cell.position.set(0.12, 0, 0);
+  cell.add(new THREE.Mesh(new THREE.SphereGeometry(0.24, 48, 32), outerMat));
+  cell.add(new THREE.Mesh(new THREE.SphereGeometry(0.233, 44, 30), innerMat));
+  cell.add(new THREE.Mesh(new THREE.SphereGeometry(0.212, 36, 28), cytoMat));
+  const nucMat = new THREE.MeshStandardMaterial({ color: 0x4f7d83, roughness: 0.6, transparent: true, opacity: 0.6 });
+  const nuc = new THREE.Mesh(new THREE.SphereGeometry(0.09, 32, 22), nucMat);
+  nuc.position.set(0.04, -0.02, 0.03);
+  cell.add(nuc);
+  // surface receptor where ADC binds (HER2-like)
+  const recMat = new THREE.MeshStandardMaterial({ color: 0x305c63, roughness: 0.45, metalness: 0.15 });
+  const recHeadMat = new THREE.MeshStandardMaterial({ color: 0x52808a, roughness: 0.45, metalness: 0.15 });
+  const recPos = new THREE.Vector3(-0.22, 0.04, 0);   // local to cell
+  const recStalk = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.10, 12), recMat);
+  recStalk.position.copy(recPos);
+  recStalk.rotation.z = Math.PI / 2;
+  cell.add(recStalk);
+  const recHead = new THREE.Mesh(new THREE.SphereGeometry(0.022, 18, 14), recHeadMat);
+  recHead.position.set(recPos.x - 0.06, recPos.y, recPos.z);
+  cell.add(recHead);
+  const recTip = new THREE.Mesh(new THREE.SphereGeometry(0.014, 14, 10), recHeadMat);
+  recTip.position.set(recPos.x - 0.092, recPos.y + 0.015, recPos.z);
+  cell.add(recTip);
   g.add(cell);
-  // surface receptor where ADC binds
-  const recMat = new THREE.MeshStandardMaterial({ color: 0x4a6e75, roughness: 0.5 });
-  const receptor = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.08, 12), recMat);
-  receptor.position.set(-0.10, 0.02, 0);
-  receptor.rotation.z = Math.PI / 2;
-  g.add(receptor);
-  // ADC = antibody + linker + payload
+  // ===== ADC: full IgG + linker + payload (small molecule cluster) =====
   const adc = new THREE.Group();
-  const abMat  = new THREE.MeshStandardMaterial({ color: 0xe8d36a, roughness: 0.45 });
-  const fc = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.06, 10), abMat);
-  fc.position.y = -0.02;
-  adc.add(fc);
-  for (const sgn of [-1, +1]) {
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.08, 10), abMat);
-    arm.position.set(sgn * 0.025, 0.04, 0);
+  const heavyMat = new THREE.MeshStandardMaterial({ color: 0xe6c83d, roughness: 0.42, metalness: 0.12 });
+  const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff0a0, roughness: 0.42, metalness: 0.12 });
+  // Fc (the "base")
+  for (const dx of [-0.011, 0.011]) {
+    const ch3 = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.05, 14), heavyMat);
+    ch3.position.set(dx, -0.06, 0);
+    adc.add(ch3);
+    const ch2 = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.05, 14), heavyMat);
+    ch2.position.set(dx, -0.015, 0);
+    adc.add(ch2);
+  }
+  const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.022, 18, 14), heavyMat);
+  hinge.position.y = 0.018;
+  adc.add(hinge);
+  for (const sgn of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.013, 0.06, 12), heavyMat))
+      .position.set(0, 0.035, -0.005);
+    const vh = new THREE.Mesh(new THREE.SphereGeometry(0.016, 18, 14), heavyMat);
+    vh.position.set(0, 0.075, -0.008);
+    arm.add(vh);
+    arm.add(new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.011, 0.05, 12), lightMat))
+      .position.set(0, 0.040, 0.012);
+    const vl = new THREE.Mesh(new THREE.SphereGeometry(0.014, 16, 12), lightMat);
+    vl.position.set(0, 0.075, 0.015);
+    arm.add(vl);
+    arm.position.set(sgn * 0.030, 0.025, 0);
     arm.rotation.z = sgn * -0.55;
     adc.add(arm);
   }
-  // linker + payload (small dark sphere attached to the Fc)
-  const linker = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.04, 6), new THREE.MeshStandardMaterial({ color: 0x6a5a48 }));
-  linker.position.y = -0.07;
-  adc.add(linker);
-  const payload = new THREE.Mesh(new THREE.SphereGeometry(0.014, 14, 10), new THREE.MeshStandardMaterial({ color: 0xb13a4a, emissive: 0x401015, emissiveIntensity: 0.4 }));
-  payload.position.y = -0.10;
-  adc.add(payload);
-  adc.position.set(-0.30, 0.05, 0);
-  adc.rotation.z = Math.PI;       // payload pointing toward the cell
+  // linker chain — three small spheres between Fc and payload
+  const linkerMat = new THREE.MeshStandardMaterial({ color: 0x6a5a48, roughness: 0.55, metalness: 0.2 });
+  for (let i = 0; i < 4; i++) {
+    const link = new THREE.Mesh(new THREE.SphereGeometry(0.006, 10, 8), linkerMat);
+    link.position.set(-0.005, -0.10 - i * 0.014, 0);
+    adc.add(link);
+  }
+  // payload — a small "molecule" (a few coloured atoms)
+  const payloadGroup = new THREE.Group();
+  payloadGroup.position.set(-0.012, -0.165, 0);
+  const atomCarbon = new THREE.MeshStandardMaterial({ color: 0x303030, roughness: 0.5 });
+  const atomN      = new THREE.MeshStandardMaterial({ color: 0x3677d4, roughness: 0.5 });
+  const atomO      = new THREE.MeshStandardMaterial({ color: 0xd84a4a, roughness: 0.5 });
+  const atomAccent = new THREE.MeshStandardMaterial({ color: 0xff7090, roughness: 0.4, emissive: 0x401015, emissiveIntensity: 0.5 });
+  const atomPositions = [
+    [ 0.000,  0.000, 0.000, atomAccent, 0.014],
+    [ 0.020,  0.010, 0.000, atomCarbon, 0.010],
+    [-0.020,  0.005, 0.005, atomN,      0.011],
+    [ 0.010, -0.014, 0.005, atomO,      0.010],
+    [-0.014, -0.013, -0.005, atomCarbon, 0.009],
+    [ 0.018, -0.022, -0.005, atomCarbon, 0.009],
+  ];
+  for (const [ax, ay, az, mat, rad] of atomPositions) {
+    const atom = new THREE.Mesh(new THREE.SphereGeometry(rad, 14, 10), mat);
+    atom.position.set(ax, ay, az);
+    payloadGroup.add(atom);
+  }
+  adc.add(payloadGroup);
+  adc.position.set(-0.36, 0.10, 0);
   g.add(adc);
-  // internalised payload (visible once ADC is "inside")
-  const insidePayload = new THREE.Mesh(new THREE.SphereGeometry(0.020, 14, 10), new THREE.MeshStandardMaterial({ color: 0xff6a82, emissive: 0x401015, emissiveIntensity: 0.6 }));
-  insidePayload.position.set(0.10, 0, 0);
+  // ===== Endocytic vesicle + freed payload inside the cell =====
+  const vesicleMat = new THREE.MeshStandardMaterial({ color: 0xb6dde2, roughness: 0.55, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+  const vesicle = new THREE.Mesh(new THREE.SphereGeometry(0.04, 28, 20), vesicleMat);
+  vesicle.position.set(0.05, 0, 0);
+  vesicle.visible = false;
+  g.add(vesicle);
+  const insidePayload = payloadGroup.clone(true);
+  insidePayload.scale.setScalar(1.3);
+  insidePayload.position.set(0.10, -0.04, 0.02);
   insidePayload.visible = false;
   g.add(insidePayload);
   let t = 0;
@@ -5036,39 +5544,46 @@ function buildDemoADC() {
     group: g,
     update(dt) {
       t += dt;
-      const phase = (t % 8.0) / 8.0;
-      if (phase < 0.4) {
-        // approach receptor
-        const p = phase / 0.4;
-        adc.position.x = THREE.MathUtils.lerp(-0.30, -0.10, p);
-        adc.position.y = THREE.MathUtils.lerp(0.10, 0.02, p);
-        adc.rotation.z = THREE.MathUtils.lerp(Math.PI + 0.4, Math.PI, p);
-        insidePayload.visible = false;
+      const phase = (t % 9.0) / 9.0;
+      if (phase < 0.35) {
+        const p = phase / 0.35;
+        adc.position.x = THREE.MathUtils.lerp(-0.36, -0.12, p);
+        adc.position.y = THREE.MathUtils.lerp(0.18, 0.04, p);
+        adc.rotation.z = THREE.MathUtils.lerp(0.5, 0, p);
+        adc.scale.setScalar(1);
         adc.visible = true;
-      } else if (phase < 0.6) {
-        // dock + start internalising
-        const p = (phase - 0.4) / 0.2;
-        adc.position.x = -0.10 + p * 0.08;
-        adc.position.y = 0.02 - p * 0.02;
-        adc.scale.setScalar(1 - p * 0.4);
+        vesicle.visible = false;
         insidePayload.visible = false;
-      } else if (phase < 0.8) {
-        // inside the cell — payload is now visible inside; ADC hidden
+      } else if (phase < 0.55) {
+        // docked + membrane invaginating
+        adc.position.set(-0.10, 0.02, 0);
+        const p = (phase - 0.35) / 0.20;
+        adc.scale.setScalar(1 - p * 0.25);
+        vesicle.visible = p > 0.4;
+        vesicle.position.set(-0.04 + p * 0.06, 0.0, 0);
+        vesicle.scale.setScalar(0.6 + p * 0.6);
+      } else if (phase < 0.78) {
+        // inside the cell — payload released from the vesicle
         adc.visible = false;
+        const p = (phase - 0.55) / 0.23;
+        vesicle.visible = p < 0.7;
+        vesicle.position.set(0.02 + p * 0.10, -0.02 - p * 0.02, 0);
+        vesicle.scale.setScalar(1.2 - p * 0.3);
         insidePayload.visible = true;
-        const p = (phase - 0.6) / 0.2;
-        insidePayload.position.x = THREE.MathUtils.lerp(-0.05, 0.10, p);
-        insidePayload.scale.setScalar(1 + p * 0.4);
+        insidePayload.position.x = THREE.MathUtils.lerp(0.02, 0.14, p);
+        insidePayload.position.y = THREE.MathUtils.lerp(-0.02, -0.05, p);
+        insidePayload.scale.setScalar(1.3 + p * 0.5);
       } else {
         // pulse + reset
+        const p = (phase - 0.78) / 0.22;
         adc.visible = false;
+        vesicle.visible = false;
         insidePayload.visible = true;
-        const p = (phase - 0.8) / 0.2;
-        insidePayload.scale.setScalar(1.4 + Math.sin(p * Math.PI * 4) * 0.08);
-        // fade for the reset
-        cellMat.opacity = 0.65 - p * 0.15;
+        insidePayload.scale.setScalar(1.8 + Math.sin(p * Math.PI * 6) * 0.10);
+        outerMat.opacity = 0.55 - p * 0.20;
+        innerMat.opacity = 0.40 - p * 0.15;
       }
-      if (phase < 0.05) { adc.scale.setScalar(1); cellMat.opacity = 0.65; }
+      if (phase < 0.04) { outerMat.opacity = 0.55; innerMat.opacity = 0.40; adc.scale.setScalar(1); }
     }
   };
 }
@@ -5076,78 +5591,123 @@ function buildDemoADC() {
 // ---- 7. PD-1 / PD-L1 checkpoint blockade ----
 function buildDemoPD1() {
   const g = new THREE.Group();
-  // tumour cell (right)
-  const tumMat = new THREE.MeshStandardMaterial({ color: 0xc77b9a, roughness: 0.55, transparent: true, opacity: 0.70 });
-  const tumour = new THREE.Mesh(new THREE.SphereGeometry(0.20, 36, 26), tumMat);
-  tumour.position.set(0.22, 0, 0);
+  // ===== Tumour cell (right) — bilayer + nucleus =====
+  const tumOuter = new THREE.MeshStandardMaterial({ color: 0xd58cb0, roughness: 0.55, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  const tumInner = new THREE.MeshStandardMaterial({ color: 0xb56a90, roughness: 0.6, transparent: true, opacity: 0.40, side: THREE.DoubleSide });
+  const tumNucMat = new THREE.MeshStandardMaterial({ color: 0x6e3060, roughness: 0.6, transparent: true, opacity: 0.55 });
+  const tumour = new THREE.Group();
+  tumour.position.set(0.24, 0, 0);
+  tumour.add(new THREE.Mesh(new THREE.SphereGeometry(0.22, 44, 30), tumOuter));
+  tumour.add(new THREE.Mesh(new THREE.SphereGeometry(0.213, 40, 28), tumInner));
+  const tumNuc = new THREE.Mesh(new THREE.SphereGeometry(0.085, 28, 20), tumNucMat);
+  tumNuc.position.set(0.04, -0.03, 0.02);
+  tumour.add(tumNuc);
   g.add(tumour);
-  // PD-L1 ligand on tumour
-  const lMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c8, roughness: 0.5 });
-  const pdl1 = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.06, 10), lMat);
-  pdl1.position.set(0.02, 0.0, 0);
-  pdl1.rotation.z = Math.PI / 2;
-  g.add(pdl1);
-  // PD-L1 head
-  const pdl1Head = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), lMat);
-  pdl1Head.position.set(-0.01, 0, 0);
-  g.add(pdl1Head);
-  // T-cell (left)
-  const tcellMat = new THREE.MeshStandardMaterial({ color: 0x6ec0a8, roughness: 0.55, transparent: true, opacity: 0.75 });
-  const tcell = new THREE.Mesh(new THREE.SphereGeometry(0.16, 32, 24), tcellMat);
+  // ===== T-cell (left) — bilayer + nucleus =====
+  const tcellOuter = new THREE.MeshStandardMaterial({ color: 0x8ad6bd, roughness: 0.55, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  const tcellInner = new THREE.MeshStandardMaterial({ color: 0x66b89a, roughness: 0.6, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+  const tcellNucMat = new THREE.MeshStandardMaterial({ color: 0x2e7060, roughness: 0.6, transparent: true, opacity: 0.55 });
+  const tcell = new THREE.Group();
   tcell.position.set(-0.24, 0, 0);
+  tcell.add(new THREE.Mesh(new THREE.SphereGeometry(0.17, 40, 28), tcellOuter));
+  tcell.add(new THREE.Mesh(new THREE.SphereGeometry(0.163, 36, 26), tcellInner));
+  const tcellNuc = new THREE.Mesh(new THREE.SphereGeometry(0.07, 26, 18), tcellNucMat);
+  tcellNuc.position.set(-0.03, 0, -0.02);
+  tcell.add(tcellNuc);
   g.add(tcell);
-  // PD-1 receptor on T-cell
-  const rMat = new THREE.MeshStandardMaterial({ color: 0x355a4d, roughness: 0.5 });
-  const pd1 = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.06, 10), rMat);
-  pd1.position.set(-0.05, 0.0, 0);
-  pd1.rotation.z = Math.PI / 2;
-  g.add(pd1);
-  const pd1Head = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), rMat);
-  pd1Head.position.set(-0.02, 0, 0);
+  // ===== PD-L1 on tumour (right side, reaching left) =====
+  const ligMat = new THREE.MeshStandardMaterial({ color: 0xb6b6c2, roughness: 0.4, metalness: 0.18 });
+  const ligHeadMat = new THREE.MeshStandardMaterial({ color: 0xdadce6, roughness: 0.4, metalness: 0.18 });
+  const pdl1Stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.10, 10), ligMat);
+  pdl1Stalk.rotation.z = Math.PI / 2;
+  pdl1Stalk.position.set(0.04, 0.02, 0);
+  g.add(pdl1Stalk);
+  const pdl1Head = new THREE.Mesh(new THREE.SphereGeometry(0.025, 18, 14), ligHeadMat);
+  pdl1Head.position.set(-0.014, 0.02, 0);
+  g.add(pdl1Head);
+  // ===== PD-1 on T-cell (left side, reaching right) =====
+  const recMat = new THREE.MeshStandardMaterial({ color: 0x335c4d, roughness: 0.4, metalness: 0.18 });
+  const recHeadMat = new THREE.MeshStandardMaterial({ color: 0x55846e, roughness: 0.4, metalness: 0.18 });
+  const pd1Stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.10, 10), recMat);
+  pd1Stalk.rotation.z = Math.PI / 2;
+  pd1Stalk.position.set(-0.04, 0.02, 0);
+  g.add(pd1Stalk);
+  const pd1Head = new THREE.Mesh(new THREE.SphereGeometry(0.025, 18, 14), recHeadMat);
+  pd1Head.position.set(0.014, 0.02, 0);
   g.add(pd1Head);
-  // blocking antibody (Keytruda-like)
-  const abMat = new THREE.MeshStandardMaterial({ color: 0xe6d56a, roughness: 0.45 });
+  // ===== Checkpoint antibody (anti-PD-1, Keytruda-like) — full IgG =====
   const ab = new THREE.Group();
-  const fc = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.06, 10), abMat);
-  fc.position.y = -0.025;
-  ab.add(fc);
-  for (const sgn of [-1, +1]) {
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.08, 10), abMat);
-    arm.position.set(sgn * 0.028, 0.04, 0);
-    arm.rotation.z = sgn * -0.55;
+  const heavyMat = new THREE.MeshStandardMaterial({ color: 0xe6c83d, roughness: 0.42, metalness: 0.12 });
+  const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff0a0, roughness: 0.42, metalness: 0.12 });
+  // Fc
+  for (const dx of [-0.011, 0.011]) {
+    const ch3 = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.05, 14), heavyMat);
+    ch3.position.set(dx, 0.06, 0);
+    ab.add(ch3);
+    const ch2 = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.05, 14), heavyMat);
+    ch2.position.set(dx, 0.015, 0);
+    ab.add(ch2);
+  }
+  const hinge = new THREE.Mesh(new THREE.SphereGeometry(0.022, 18, 14), heavyMat);
+  hinge.position.y = -0.018;
+  ab.add(hinge);
+  for (const sgn of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.add(new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.013, 0.06, 12), heavyMat))
+      .position.set(0, -0.035, -0.005);
+    const vh = new THREE.Mesh(new THREE.SphereGeometry(0.016, 18, 14), heavyMat);
+    vh.position.set(0, -0.075, -0.008);
+    arm.add(vh);
+    arm.add(new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.011, 0.05, 12), lightMat))
+      .position.set(0, -0.040, 0.012);
+    const vl = new THREE.Mesh(new THREE.SphereGeometry(0.014, 16, 12), lightMat);
+    vl.position.set(0, -0.075, 0.015);
+    arm.add(vl);
+    // CDR loops
+    const cdr = new THREE.Mesh(new THREE.SphereGeometry(0.010, 12, 10), new THREE.MeshStandardMaterial({ color: 0xffcd4a, roughness: 0.35, emissive: 0x3a2200, emissiveIntensity: 0.4 }));
+    cdr.position.set(0, -0.095, 0.005);
+    arm.add(cdr);
+    arm.position.set(sgn * 0.030, -0.025, 0);
+    arm.rotation.z = sgn *  0.55;        // arms pointing DOWN toward the receptor
     ab.add(arm);
   }
-  ab.position.set(-0.015, 0.18, 0);
+  ab.position.set(0.0, 0.30, 0);
   g.add(ab);
-  // "BLOCKED" emoji-equivalent: a red line that flashes when antibody is in place
+  // ===== "BLOCKED" indicator — small red diagonal line + slight flash =====
   const blockMat = new THREE.MeshBasicMaterial({ color: 0xff5050, transparent: true, opacity: 0 });
-  const block = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.005), blockMat);
-  block.position.set(-0.015, 0.06, 0.02);
+  const block = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.006), blockMat);
+  block.position.set(0.0, 0.06, 0.02);
   block.rotation.z = Math.PI / 4;
   g.add(block);
+  const block2 = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.006), blockMat);
+  block2.position.set(0.0, 0.06, 0.02);
+  block2.rotation.z = -Math.PI / 4;
+  g.add(block2);
   let t = 0;
   return {
     group: g,
     update(dt) {
       t += dt;
-      const phase = (t % 7.0) / 7.0;
+      const phase = (t % 8.0) / 8.0;
       if (phase < 0.40) {
-        // antibody dropping in
+        // antibody drops in toward PD-1
         const p = phase / 0.40;
-        ab.position.y = THREE.MathUtils.lerp(0.22, 0.045, p);
-        ab.rotation.z = Math.sin(p * Math.PI) * 0.15;
+        ab.position.y = THREE.MathUtils.lerp(0.30, 0.135, p);
+        ab.position.x = THREE.MathUtils.lerp(0.02, 0.0, p);
+        ab.rotation.z = Math.sin(p * Math.PI) * 0.10;
         blockMat.opacity = 0;
-      } else if (phase < 0.70) {
-        // blockade in place; PD-1/PD-L1 cannot meet
-        ab.position.y = 0.045;
+      } else if (phase < 0.78) {
+        ab.position.set(0, 0.135, 0);
         ab.rotation.z = 0;
-        blockMat.opacity = 0.5 + Math.sin(t * 8) * 0.3;
+        blockMat.opacity = 0.45 + Math.sin(t * 7) * 0.25;
       } else {
-        // pulse + reset
-        const p = (phase - 0.70) / 0.30;
-        ab.position.y = THREE.MathUtils.lerp(0.045, 0.22, p);
-        blockMat.opacity = 0.5 * (1 - p);
+        const p = (phase - 0.78) / 0.22;
+        ab.position.y = THREE.MathUtils.lerp(0.135, 0.30, p);
+        blockMat.opacity = 0.45 * (1 - p);
       }
+      // gentle cell breathing
+      tcell.scale.setScalar(1 + Math.sin(t * 1.5) * 0.012);
+      tumour.scale.setScalar(1 + Math.sin(t * 1.5 + 1) * 0.012);
     }
   };
 }
@@ -5156,23 +5716,8 @@ function buildDemoPD1() {
 function buildBiotechDemoBoard() {
   const g = new THREE.Group();
   // Reuse the same cork + frame + legs proportions as the biotech-world board.
-  const cw = 512, ch = 384;
-  const corkCv = document.createElement('canvas');
-  corkCv.width = cw; corkCv.height = ch;
-  const cctx = corkCv.getContext('2d');
-  cctx.fillStyle = '#a87842';
-  cctx.fillRect(0, 0, cw, ch);
-  for (let i = 0; i < 4500; i++) {
-    const v = 95 + Math.floor(Math.random() * 90);
-    cctx.fillStyle = `rgb(${v + 30}, ${v}, ${Math.max(0, v - 25)})`;
-    cctx.beginPath();
-    cctx.arc(Math.random() * cw, Math.random() * ch, 1.2 + Math.random() * 2.4, 0, Math.PI * 2);
-    cctx.fill();
-  }
-  const corkTex = new THREE.CanvasTexture(corkCv);
-  corkTex.colorSpace = THREE.SRGBColorSpace;
-  corkTex.anisotropy = 8;
-  const corkMat = new THREE.MeshStandardMaterial({ map: corkTex, roughness: 0.95 });
+  const corkTex = makeCorkTexture();
+  const corkMat = new THREE.MeshStandardMaterial({ map: corkTex, roughness: 0.92, metalness: 0.0, bumpMap: corkTex, bumpScale: 0.01 });
   const BW = 3.2, BH = 1.6, BD = 0.04;
   const PANEL_Y = 1.55;
   const panel = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BD), corkMat);
@@ -5257,10 +5802,10 @@ function buildBiotechDemoBoard() {
       desc: "Tumour cells display PD-L1, which engages PD-1 on T-cells and tells them to stand down. A checkpoint-inhibitor antibody (like Keytruda) plugs into PD-1 or PD-L1, blocking the handshake — and the T-cell is free to kill the tumour." },
   ];
   const positions = [
-    // top row (y = +0.28), 4 columns
-    [-0.96,  0.30], [-0.32,  0.30], [ 0.32,  0.30], [ 0.96,  0.30],
-    // bottom row (y = -0.28), 3 columns
-    [-0.64, -0.30], [ 0.00, -0.30], [ 0.64, -0.30],
+    // top row, pushed lower so nothing covers the title strip at the top
+    [-0.96,  0.05], [-0.32,  0.05], [ 0.32,  0.05], [ 0.96,  0.05],
+    // bottom row, near the bottom of the panel
+    [-0.64, -0.36], [ 0.00, -0.36], [ 0.64, -0.36],
   ];
   const HOME_SCALE = 0.45;          // size on the board
   const items = [];
@@ -8217,19 +8762,24 @@ html { scroll-behavior: smooth; }
 
       projectsPromptEl.style.display = 'none';
 
-      // press E or ESC to exit (auto-repeat-guarded by eHeld)
+      // press E or ESC to exit straight back out to the projects world —
+      // mirrors the computer / crate behaviour: one press → free to walk.
       if (keys['e'] || keys['escape']) {
         if (!projectsWorld.eHeld) {
-          // demo view first → board view → out
-          if (projectsWorld.demoActive) {
-            if (projectsWorld.closeDemoView) projectsWorld.closeDemoView();
-          } else {
-            projectsWorld.boardActive = false;
-            if (projectsWorld.closeBoardCard) projectsWorld.closeBoardCard();
-            if (projectsWorld.closeDemoView) projectsWorld.closeDemoView();
-            unstickProjectsBaymax(b);
-            restoreParentFocus();
+          projectsWorld.boardActive = false;
+          if (projectsWorld.closeBoardCard) projectsWorld.closeBoardCard();
+          if (projectsWorld.closeDemoView) projectsWorld.closeDemoView();
+          // snap any demo item back to its home so the board looks clean
+          // next time the player walks up.
+          if (board.demoItems && board.demoItems.length) {
+            for (const it of board.demoItems) {
+              it.group.position.copy(it.homeLocal);
+              it.group.scale.setScalar(it.homeScale);
+              it.group.rotation.set(0, 0, 0);
+            }
           }
+          unstickProjectsBaymax(b);
+          restoreParentFocus();
         }
         projectsWorld.eHeld = true;
       } else {
