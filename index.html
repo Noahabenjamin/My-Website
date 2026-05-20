@@ -161,6 +161,89 @@
   }
   .uc-bar-1 { transform: translateY(-50%) rotate(-32deg); }
   .uc-bar-2 { transform: translateY(-50%) rotate( 32deg); }
+  /* Biotech-demo overlay — shown while the player is in the demo board's
+     close-up view of a single specimen.  Has a hover tooltip mode that
+     follows the cursor and an "info panel" mode anchored to the right edge
+     while the demo is active.                                            */
+  #demo-overlay {
+    position: fixed;
+    z-index: 36;
+    pointer-events: none;
+    display: none;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    box-sizing: border-box;
+    transition:
+      width 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      padding 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      background-color 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      border-radius 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      left 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+      top 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform, left, top;
+  }
+  #demo-overlay .dm-title {
+    color: #f5efe2;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1.25;
+    transition: font-size 0.36s cubic-bezier(0.4, 0, 0.2, 1), margin-bottom 0.28s ease-out;
+    white-space: nowrap;
+  }
+  #demo-overlay .dm-desc {
+    color: #cfc7b2;
+    font-size: 14px;
+    line-height: 1.55;
+    font-weight: 300;
+    margin-top: 0;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 0.32s ease-out 0.18s, max-height 0.36s ease-out;
+  }
+  #demo-overlay .dm-hint {
+    margin-top: 12px;
+    font-size: 12px;
+    color: rgba(245, 239, 226, 0.55);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 0.3s ease-out 0.30s;
+  }
+  #demo-overlay.as-tooltip {
+    display: block;
+    padding: 7px 12px;
+    background: rgba(18, 20, 26, 0.86);
+    border: 1px solid rgba(245, 239, 226, 0.18);
+    border-radius: 6px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    transform: translate(14px, 14px);
+  }
+  #demo-overlay.as-tooltip .dm-title { font-size: 14px; }
+  #demo-overlay.as-panel {
+    display: block;
+    pointer-events: auto;
+    width: 340px;
+    max-width: calc(100vw - 40px);
+    padding: 20px 24px 22px;
+    background: rgba(18, 20, 26, 0.94);
+    border: 1px solid rgba(245, 239, 226, 0.22);
+    border-radius: 14px;
+    box-shadow: 0 28px 60px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  #demo-overlay.as-panel .dm-title {
+    font-size: 19px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 10px;
+    white-space: normal;
+  }
+  #demo-overlay.as-panel .dm-desc { opacity: 1; max-height: 320px; }
+  #demo-overlay.as-panel .dm-hint { opacity: 1; }
   /* Biotech pin overlay — single element with two modes:
        .as-tooltip → small chip near the cursor while hovering a pin
        .as-card    → pop-out card anchored near the clicked pin (title +
@@ -430,6 +513,12 @@
   <span class="bp-close" role="button" aria-label="close">×</span>
   <div class="bp-title"></div>
   <div class="bp-desc"></div>
+</div>
+<!-- Demo-board overlay: hover -> tooltip, click -> right-side info panel. -->
+<div id="demo-overlay" aria-hidden="true">
+  <div class="dm-title"></div>
+  <div class="dm-desc"></div>
+  <div class="dm-hint">drag to rotate · E to step back</div>
 </div>
 <button id="laptop-close" type="button" aria-label="close">×</button>
 <!-- Visible only while computer-view is open: opens paattikiiltoon.fi in a new tab. -->
@@ -4494,6 +4583,724 @@ function buildCorkBoardWithMap(opts = {}) {
   return g;
 }
 
+// ==========================================================================
+// Biotech "demos" board — replaces the stylised "our world" map.
+// Hosts 7 mounted mini-models (1 PCR thermocycler + 6 MOA scenes) the player
+// can click to enter a close-up rotatable demo view.
+// ==========================================================================
+
+// Each demo item is built by a small factory that returns:
+//   { group, update(dt) }
+// where `group` is a THREE.Group anchored at its own origin (Y-up) and
+// `update` is called every frame while the item is the active demo.
+
+// ---- 1. PCR thermocycler ----
+function buildDemoPCR() {
+  const g = new THREE.Group();
+  const caseMat  = new THREE.MeshStandardMaterial({ color: 0xe2e6ec, roughness: 0.4, metalness: 0.2 });
+  const darkMat  = new THREE.MeshStandardMaterial({ color: 0x222428, roughness: 0.6 });
+  const wellMat  = new THREE.MeshStandardMaterial({ color: 0x9cb6dd, roughness: 0.7, transparent: true, opacity: 0.85 });
+  // body
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.16, 0.28), caseMat);
+  body.position.y = 0.08;
+  g.add(body);
+  // sample block on top
+  const block = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.20), darkMat);
+  block.position.y = 0.165;
+  g.add(block);
+  // 8 × 12 wells (96-well plate)
+  const wells = [];
+  const COLS = 12, ROWS = 8;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const w = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.0075, 0.0075, 0.020, 10),
+        wellMat
+      );
+      w.position.set(-0.110 + c * 0.020, 0.200, -0.072 + r * 0.020);
+      g.add(w);
+      wells.push(w);
+    }
+  }
+  // hinged lid (open)
+  const lidPivot = new THREE.Group();
+  lidPivot.position.set(0, 0.16, -0.14);
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.03, 0.30), caseMat);
+  lid.position.set(0, 0.015, 0.15);
+  lidPivot.add(lid);
+  // small viewing window on the lid
+  const viewWin = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.10), new THREE.MeshBasicMaterial({ color: 0x2a3a4a }));
+  viewWin.rotation.x = -Math.PI / 2;
+  viewWin.position.set(0, 0.032, 0.15);
+  lidPivot.add(viewWin);
+  lidPivot.rotation.x = -Math.PI * 0.42;     // open
+  g.add(lidPivot);
+  // front display
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.06), new THREE.MeshBasicMaterial({ color: 0x1a3a5a }));
+  screen.position.set(0, 0.06, 0.141);
+  g.add(screen);
+  // status LEDs on the screen
+  const ledMat1 = new THREE.MeshBasicMaterial({ color: 0x6ce0a0 });
+  const ledMat2 = new THREE.MeshBasicMaterial({ color: 0xff6a6a });
+  const led1 = new THREE.Mesh(new THREE.CircleGeometry(0.006, 12), ledMat1);
+  led1.position.set(-0.06, 0.075, 0.142);
+  g.add(led1);
+  const led2 = new THREE.Mesh(new THREE.CircleGeometry(0.006, 12), ledMat2);
+  led2.position.set(-0.04, 0.075, 0.142);
+  g.add(led2);
+  let t = 0;
+  return {
+    group: g,
+    update(dt) {
+      t += dt;
+      // thermal cycling: wells tint from cool blue (anneal) → orange-red (denature)
+      const phase = (Math.sin(t * 0.9) + 1) * 0.5;   // 0..1
+      const cr = 0.55 + phase * 0.40;
+      const cg = 0.55 + (1 - phase) * 0.20;
+      const cb = 0.90 - phase * 0.55;
+      wellMat.color.setRGB(cr, cg, cb);
+      // LEDs blink to indicate "running"
+      ledMat1.color.setRGB(0.4 + 0.6 * (Math.sin(t * 4) * 0.5 + 0.5), 1.0, 0.6);
+    }
+  };
+}
+
+// ---- 2. mRNA → ribosome → protein ----
+function buildDemoRibosome() {
+  const g = new THREE.Group();
+  const largeMat = new THREE.MeshStandardMaterial({ color: 0xa6b5d2, roughness: 0.7, flatShading: true });
+  const smallMat = new THREE.MeshStandardMaterial({ color: 0xc3cee5, roughness: 0.7, flatShading: true });
+  const largeSub = new THREE.Mesh(new THREE.SphereGeometry(0.12, 28, 20), largeMat);
+  largeSub.position.y = 0.07;
+  largeSub.scale.set(1.05, 0.95, 0.95);
+  g.add(largeSub);
+  const smallSub = new THREE.Mesh(new THREE.SphereGeometry(0.09, 24, 18), smallMat);
+  smallSub.position.y = -0.05;
+  smallSub.scale.set(1.05, 0.85, 0.95);
+  g.add(smallSub);
+  // mRNA strand passing through the ribosome cleft
+  const strandPts = [];
+  const STRAND_LEN = 0.46;
+  for (let i = 0; i <= 60; i++) {
+    const t = i / 60;
+    strandPts.push(new THREE.Vector3(
+      -STRAND_LEN / 2 + t * STRAND_LEN,
+      0.005 + Math.sin(t * 8) * 0.006,
+      0.05 + Math.sin(t * 4) * 0.005
+    ));
+  }
+  const mrnaCurve = new THREE.CatmullRomCurve3(strandPts);
+  const mrnaMat = new THREE.MeshStandardMaterial({ color: 0xff6e54, roughness: 0.6 });
+  const mrnaTube = new THREE.Mesh(new THREE.TubeGeometry(mrnaCurve, 60, 0.008, 8, false), mrnaMat);
+  g.add(mrnaTube);
+  // codon "beads" — small colored spheres scattered along mRNA
+  const codonGroup = new THREE.Group();
+  for (let i = 0; i < 12; i++) {
+    const c = new THREE.Mesh(
+      new THREE.SphereGeometry(0.012, 10, 8),
+      new THREE.MeshStandardMaterial({
+        color: [0x4a89dc, 0xff8c42, 0x6cdb8a, 0xc97cc1][i % 4],
+        roughness: 0.6
+      })
+    );
+    const t = (i + 0.5) / 12;
+    c.position.set(-STRAND_LEN / 2 + t * STRAND_LEN, 0.005, 0.05);
+    codonGroup.add(c);
+  }
+  g.add(codonGroup);
+  // growing peptide chain extruding out the TOP of the large subunit
+  const chainBeads = [];
+  const chainMat  = new THREE.MeshStandardMaterial({ color: 0xf8e6a8, roughness: 0.5 });
+  for (let i = 0; i < 12; i++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), chainMat);
+    // arrange in a curl coming out the top
+    const a = i * 0.7;
+    b.position.set(Math.cos(a) * 0.03, 0.20 + i * 0.025, Math.sin(a) * 0.03);
+    b.visible = false;
+    chainBeads.push(b);
+    g.add(b);
+  }
+  let t = 0;
+  return {
+    group: g,
+    update(dt) {
+      t += dt;
+      // peptide chain grows then resets (cycle ~6s)
+      const phase = (t % 6.0) / 6.0;
+      const grown = Math.floor(phase * (chainBeads.length + 2));
+      for (let i = 0; i < chainBeads.length; i++) {
+        chainBeads[i].visible = i < grown;
+      }
+      // mRNA + codons slide to the left (continuous translation)
+      const slide = -(t * 0.04) % 0.04;
+      mrnaTube.position.x = slide;
+      codonGroup.position.x = slide;
+      // gentle ribosome breathing
+      const breath = 1 + Math.sin(t * 1.6) * 0.012;
+      largeSub.scale.set(1.05 * breath, 0.95 * breath, 0.95 * breath);
+      smallSub.scale.set(1.05 * breath, 0.85 * breath, 0.95 * breath);
+    }
+  };
+}
+
+// ---- 3. Antibody binding to a tumour-cell receptor ----
+function buildDemoAntibody() {
+  const g = new THREE.Group();
+  // big translucent cell (right side)
+  const cellMat = new THREE.MeshStandardMaterial({ color: 0xa57acc, roughness: 0.55, transparent: true, opacity: 0.55 });
+  const cell = new THREE.Mesh(new THREE.SphereGeometry(0.20, 36, 28), cellMat);
+  cell.position.set(0.18, 0, 0);
+  g.add(cell);
+  // receptors on cell surface (small stalks)
+  const recMat = new THREE.MeshStandardMaterial({ color: 0x5b4a8a, roughness: 0.5 });
+  const receptors = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 1.4 - 0.7;
+    const rec = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.06, 10), recMat);
+    const rx = 0.18 + Math.cos(a) * 0.20;
+    const rz = Math.sin(a) * 0.20;
+    rec.position.set(rx, 0.02, rz);
+    rec.lookAt(rx * 1.5, 0.03, rz * 1.5);
+    rec.rotateX(Math.PI / 2);
+    receptors.push(rec);
+    g.add(rec);
+    // ligand-binding head on the receptor
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), recMat);
+    head.position.copy(rec.position);
+    head.position.x += Math.cos(a) * 0.04;
+    head.position.z += Math.sin(a) * 0.04;
+    g.add(head);
+  }
+  // Y-shaped antibody (left side, approaching)
+  const ab = new THREE.Group();
+  const abMat = new THREE.MeshStandardMaterial({ color: 0xe6d56a, roughness: 0.45 });
+  // base/stem of the Y (the Fc region)
+  const fc = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.020, 0.08, 12), abMat);
+  fc.position.y = -0.04;
+  ab.add(fc);
+  // two Fab arms (the Y branches)
+  for (const sgn of [-1, +1]) {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.10, 10), abMat);
+    arm.position.set(sgn * 0.035, 0.04, 0);
+    arm.rotation.z = sgn * -0.6;
+    ab.add(arm);
+    // Fab tip
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.02, 12, 10), abMat);
+    tip.position.set(sgn * 0.07, 0.085, 0);
+    ab.add(tip);
+  }
+  ab.position.set(-0.30, 0, 0);
+  g.add(ab);
+  let t = 0;
+  return {
+    group: g,
+    update(dt) {
+      t += dt;
+      // approach + bind cycle (~6s loop)
+      const phase = (t % 6.0) / 6.0;
+      let p;
+      if (phase < 0.35) p = phase / 0.35;
+      else if (phase < 0.60) p = 1.0;
+      else if (phase < 0.85) p = 1.0 - (phase - 0.60) / 0.25 * 0.2;  // small recoil
+      else p = 1.0 - (phase - 0.85) / 0.15;
+      // antibody approaches the topmost receptor (i=2 area)
+      ab.position.x = THREE.MathUtils.lerp(-0.30, 0.00, p);
+      ab.position.y = THREE.MathUtils.lerp(0.18, 0.10, p);
+      ab.rotation.z = THREE.MathUtils.lerp(-0.35, 0.0, p);
+      // cell breathes
+      cell.scale.setScalar(1 + Math.sin(t * 1.4) * 0.015);
+    }
+  };
+}
+
+// ---- 4. CAR-T cell killing a tumour cell ----
+function buildDemoCART() {
+  const g = new THREE.Group();
+  // big tumour cell (right)
+  const tumMat = new THREE.MeshStandardMaterial({ color: 0xc77676, roughness: 0.55, transparent: true, opacity: 0.78 });
+  const tumour = new THREE.Mesh(new THREE.SphereGeometry(0.22, 36, 28), tumMat);
+  tumour.position.set(0.20, 0, 0);
+  g.add(tumour);
+  // antigen on tumour surface
+  const antigenMat = new THREE.MeshStandardMaterial({ color: 0xffd166, roughness: 0.5, emissive: 0x402a05, emissiveIntensity: 0.4 });
+  const antigen = new THREE.Mesh(new THREE.SphereGeometry(0.022, 14, 12), antigenMat);
+  antigen.position.set(0.0, 0.02, 0.0);
+  g.add(antigen);
+  // smaller T-cell (left)
+  const tcellMat = new THREE.MeshStandardMaterial({ color: 0x6ec0a8, roughness: 0.5 });
+  const tcell = new THREE.Mesh(new THREE.SphereGeometry(0.13, 28, 22), tcellMat);
+  tcell.position.set(-0.35, 0.05, 0);
+  g.add(tcell);
+  // CAR receptor "spikes" on the T-cell
+  const carMat = new THREE.MeshStandardMaterial({ color: 0x2a6c5a, roughness: 0.5 });
+  const cars = [];
+  for (let i = 0; i < 5; i++) {
+    const a = -0.6 + i * 0.3;
+    const car = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.04, 8), carMat);
+    car.position.set(tcell.position.x + Math.cos(a) * 0.14, 0.05 + Math.sin(a * 0.5) * 0.04, Math.sin(a) * 0.14);
+    car.lookAt(car.position.x + Math.cos(a), 0.05, Math.sin(a));
+    car.rotateX(Math.PI / 2);
+    cars.push(car);
+    g.add(car);
+  }
+  // granules (released perforin/granzyme spheres)
+  const granuleMat = new THREE.MeshStandardMaterial({ color: 0xffe186, roughness: 0.4, emissive: 0x553300, emissiveIntensity: 0.5 });
+  const granules = [];
+  for (let i = 0; i < 8; i++) {
+    const gr = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), granuleMat);
+    gr.visible = false;
+    gr.userData.basePos = new THREE.Vector3();
+    granules.push(gr);
+    g.add(gr);
+  }
+  let t = 0;
+  return {
+    group: g,
+    update(dt) {
+      t += dt;
+      const phase = (t % 8.0) / 8.0;   // 8s cycle
+      // 0.0-0.30 → T-cell approaches; 0.30-0.55 → docks; 0.55-0.85 → granules fly; 0.85-1.0 → tumour shrinks/explodes
+      if (phase < 0.30) {
+        const p = phase / 0.30;
+        tcell.position.x = THREE.MathUtils.lerp(-0.40, -0.10, p);
+        for (let i = 0; i < cars.length; i++) {
+          const a = -0.6 + i * 0.3;
+          cars[i].position.x = tcell.position.x + Math.cos(a) * 0.14;
+        }
+        for (const gr of granules) gr.visible = false;
+        tumour.scale.setScalar(1.0);
+      } else if (phase < 0.55) {
+        tcell.position.x = -0.10;
+        for (let i = 0; i < cars.length; i++) {
+          const a = -0.6 + i * 0.3;
+          cars[i].position.x = tcell.position.x + Math.cos(a) * 0.14;
+        }
+        for (const gr of granules) gr.visible = false;
+      } else if (phase < 0.85) {
+        // granules fly from T-cell to tumour
+        const p = (phase - 0.55) / 0.30;
+        for (let i = 0; i < granules.length; i++) {
+          const gr = granules[i];
+          gr.visible = true;
+          const ang = (i / granules.length) * Math.PI * 2;
+          const startX = -0.10 + Math.cos(ang) * 0.05;
+          const startY = 0.05 + Math.sin(ang) * 0.05;
+          const endX = 0.20;
+          const endY = Math.sin(ang) * 0.18;
+          gr.position.x = THREE.MathUtils.lerp(startX, endX, p);
+          gr.position.y = THREE.MathUtils.lerp(startY, endY, p);
+          gr.position.z = Math.cos(ang) * 0.18 * p;
+        }
+      } else {
+        // tumour deflates
+        const p = (phase - 0.85) / 0.15;
+        tumour.scale.setScalar(1.0 - p * 0.45);
+        tumMat.opacity = 0.78 * (1 - p * 0.6);
+        for (const gr of granules) gr.visible = false;
+      }
+    }
+  };
+}
+
+// ---- 5. CRISPR-Cas9 cutting DNA ----
+function buildDemoCRISPR() {
+  const g = new THREE.Group();
+  // DNA double helix
+  const dna = new THREE.Group();
+  const helixMat = new THREE.MeshStandardMaterial({ color: 0x6a8ed8, roughness: 0.6 });
+  const helixMat2 = new THREE.MeshStandardMaterial({ color: 0xc06868, roughness: 0.6 });
+  const rungMat   = new THREE.MeshStandardMaterial({ color: 0xa0a0a8, roughness: 0.5 });
+  const TURNS = 6;
+  const STEP  = 0.04;
+  const RAD   = 0.05;
+  const STRAND_RES = 24;
+  const totalLen = TURNS * 4 * STEP;     // 4 base-pairs per turn approximated
+  function buildStrand(phaseShift, mat) {
+    const pts = [];
+    for (let i = 0; i <= STRAND_RES * TURNS; i++) {
+      const u = i / (STRAND_RES * TURNS);
+      const a = u * TURNS * Math.PI * 2 + phaseShift;
+      pts.push(new THREE.Vector3(-totalLen/2 + u * totalLen, Math.cos(a) * RAD, Math.sin(a) * RAD));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    return new THREE.Mesh(new THREE.TubeGeometry(curve, STRAND_RES * TURNS, 0.010, 8, false), mat);
+  }
+  const strand1 = buildStrand(0,         helixMat);
+  const strand2 = buildStrand(Math.PI,   helixMat2);
+  dna.add(strand1);
+  dna.add(strand2);
+  // base-pair rungs
+  const rungSteps = TURNS * 4;
+  for (let i = 0; i <= rungSteps; i++) {
+    const u = i / rungSteps;
+    const a = u * TURNS * Math.PI * 2;
+    const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, RAD * 2, 6), rungMat);
+    rung.position.set(-totalLen/2 + u * totalLen, 0, 0);
+    rung.rotation.z = Math.PI / 2;
+    rung.rotation.x = a;
+    dna.add(rung);
+  }
+  g.add(dna);
+
+  // Cas9 blob
+  const cas9 = new THREE.Group();
+  const cas9Mat = new THREE.MeshStandardMaterial({ color: 0x9bb87a, roughness: 0.65, flatShading: true });
+  const cas9Body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.10, 1), cas9Mat);
+  cas9.add(cas9Body);
+  // guide RNA (small curved tube sticking out)
+  const grnaPts = [];
+  for (let i = 0; i <= 20; i++) {
+    const u = i / 20;
+    grnaPts.push(new THREE.Vector3(-u * 0.10, 0.02 - u * 0.04, -u * 0.04));
+  }
+  const grnaCurve = new THREE.CatmullRomCurve3(grnaPts);
+  const grna = new THREE.Mesh(new THREE.TubeGeometry(grnaCurve, 20, 0.006, 6, false), new THREE.MeshStandardMaterial({ color: 0xd0a3e0, roughness: 0.6 }));
+  cas9.add(grna);
+  cas9.position.set(0, 0.18, 0);
+  g.add(cas9);
+
+  let t = 0;
+  return {
+    group: g,
+    update(dt) {
+      t += dt;
+      const phase = (t % 7.0) / 7.0;
+      // 0-0.4 approach; 0.4-0.6 docked; 0.6-0.75 snip (split strands); 0.75-1.0 reset
+      if (phase < 0.4) {
+        const p = phase / 0.4;
+        cas9.position.y = THREE.MathUtils.lerp(0.22, 0.06, p);
+        cas9.position.x = THREE.MathUtils.lerp(-0.04, 0.0, p);
+      } else if (phase < 0.6) {
+        cas9.position.set(0.0, 0.06, 0.0);
+      } else if (phase < 0.75) {
+        // visualise the cut: split the DNA into two halves with a small gap
+        const p = (phase - 0.60) / 0.15;
+        strand1.position.x = -p * 0.04;
+        strand2.position.x = -p * 0.04;
+      } else {
+        // reset gap + retract Cas9
+        strand1.position.x = 0;
+        strand2.position.x = 0;
+        const p = (phase - 0.75) / 0.25;
+        cas9.position.y = THREE.MathUtils.lerp(0.06, 0.22, p);
+      }
+      // slow DNA spin around its long axis for visual interest
+      dna.rotation.x = t * 0.4;
+    }
+  };
+}
+
+// ---- 6. Antibody-drug conjugate (ADC) internalisation ----
+function buildDemoADC() {
+  const g = new THREE.Group();
+  // cell
+  const cellMat = new THREE.MeshStandardMaterial({ color: 0xa6cbd2, roughness: 0.6, transparent: true, opacity: 0.65 });
+  const cell = new THREE.Mesh(new THREE.SphereGeometry(0.23, 40, 28), cellMat);
+  cell.position.set(0.10, 0, 0);
+  g.add(cell);
+  // surface receptor where ADC binds
+  const recMat = new THREE.MeshStandardMaterial({ color: 0x4a6e75, roughness: 0.5 });
+  const receptor = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.08, 12), recMat);
+  receptor.position.set(-0.10, 0.02, 0);
+  receptor.rotation.z = Math.PI / 2;
+  g.add(receptor);
+  // ADC = antibody + linker + payload
+  const adc = new THREE.Group();
+  const abMat  = new THREE.MeshStandardMaterial({ color: 0xe8d36a, roughness: 0.45 });
+  const fc = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.06, 10), abMat);
+  fc.position.y = -0.02;
+  adc.add(fc);
+  for (const sgn of [-1, +1]) {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.08, 10), abMat);
+    arm.position.set(sgn * 0.025, 0.04, 0);
+    arm.rotation.z = sgn * -0.55;
+    adc.add(arm);
+  }
+  // linker + payload (small dark sphere attached to the Fc)
+  const linker = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.04, 6), new THREE.MeshStandardMaterial({ color: 0x6a5a48 }));
+  linker.position.y = -0.07;
+  adc.add(linker);
+  const payload = new THREE.Mesh(new THREE.SphereGeometry(0.014, 14, 10), new THREE.MeshStandardMaterial({ color: 0xb13a4a, emissive: 0x401015, emissiveIntensity: 0.4 }));
+  payload.position.y = -0.10;
+  adc.add(payload);
+  adc.position.set(-0.30, 0.05, 0);
+  adc.rotation.z = Math.PI;       // payload pointing toward the cell
+  g.add(adc);
+  // internalised payload (visible once ADC is "inside")
+  const insidePayload = new THREE.Mesh(new THREE.SphereGeometry(0.020, 14, 10), new THREE.MeshStandardMaterial({ color: 0xff6a82, emissive: 0x401015, emissiveIntensity: 0.6 }));
+  insidePayload.position.set(0.10, 0, 0);
+  insidePayload.visible = false;
+  g.add(insidePayload);
+  let t = 0;
+  return {
+    group: g,
+    update(dt) {
+      t += dt;
+      const phase = (t % 8.0) / 8.0;
+      if (phase < 0.4) {
+        // approach receptor
+        const p = phase / 0.4;
+        adc.position.x = THREE.MathUtils.lerp(-0.30, -0.10, p);
+        adc.position.y = THREE.MathUtils.lerp(0.10, 0.02, p);
+        adc.rotation.z = THREE.MathUtils.lerp(Math.PI + 0.4, Math.PI, p);
+        insidePayload.visible = false;
+        adc.visible = true;
+      } else if (phase < 0.6) {
+        // dock + start internalising
+        const p = (phase - 0.4) / 0.2;
+        adc.position.x = -0.10 + p * 0.08;
+        adc.position.y = 0.02 - p * 0.02;
+        adc.scale.setScalar(1 - p * 0.4);
+        insidePayload.visible = false;
+      } else if (phase < 0.8) {
+        // inside the cell — payload is now visible inside; ADC hidden
+        adc.visible = false;
+        insidePayload.visible = true;
+        const p = (phase - 0.6) / 0.2;
+        insidePayload.position.x = THREE.MathUtils.lerp(-0.05, 0.10, p);
+        insidePayload.scale.setScalar(1 + p * 0.4);
+      } else {
+        // pulse + reset
+        adc.visible = false;
+        insidePayload.visible = true;
+        const p = (phase - 0.8) / 0.2;
+        insidePayload.scale.setScalar(1.4 + Math.sin(p * Math.PI * 4) * 0.08);
+        // fade for the reset
+        cellMat.opacity = 0.65 - p * 0.15;
+      }
+      if (phase < 0.05) { adc.scale.setScalar(1); cellMat.opacity = 0.65; }
+    }
+  };
+}
+
+// ---- 7. PD-1 / PD-L1 checkpoint blockade ----
+function buildDemoPD1() {
+  const g = new THREE.Group();
+  // tumour cell (right)
+  const tumMat = new THREE.MeshStandardMaterial({ color: 0xc77b9a, roughness: 0.55, transparent: true, opacity: 0.70 });
+  const tumour = new THREE.Mesh(new THREE.SphereGeometry(0.20, 36, 26), tumMat);
+  tumour.position.set(0.22, 0, 0);
+  g.add(tumour);
+  // PD-L1 ligand on tumour
+  const lMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c8, roughness: 0.5 });
+  const pdl1 = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.06, 10), lMat);
+  pdl1.position.set(0.02, 0.0, 0);
+  pdl1.rotation.z = Math.PI / 2;
+  g.add(pdl1);
+  // PD-L1 head
+  const pdl1Head = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), lMat);
+  pdl1Head.position.set(-0.01, 0, 0);
+  g.add(pdl1Head);
+  // T-cell (left)
+  const tcellMat = new THREE.MeshStandardMaterial({ color: 0x6ec0a8, roughness: 0.55, transparent: true, opacity: 0.75 });
+  const tcell = new THREE.Mesh(new THREE.SphereGeometry(0.16, 32, 24), tcellMat);
+  tcell.position.set(-0.24, 0, 0);
+  g.add(tcell);
+  // PD-1 receptor on T-cell
+  const rMat = new THREE.MeshStandardMaterial({ color: 0x355a4d, roughness: 0.5 });
+  const pd1 = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.06, 10), rMat);
+  pd1.position.set(-0.05, 0.0, 0);
+  pd1.rotation.z = Math.PI / 2;
+  g.add(pd1);
+  const pd1Head = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), rMat);
+  pd1Head.position.set(-0.02, 0, 0);
+  g.add(pd1Head);
+  // blocking antibody (Keytruda-like)
+  const abMat = new THREE.MeshStandardMaterial({ color: 0xe6d56a, roughness: 0.45 });
+  const ab = new THREE.Group();
+  const fc = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.06, 10), abMat);
+  fc.position.y = -0.025;
+  ab.add(fc);
+  for (const sgn of [-1, +1]) {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.08, 10), abMat);
+    arm.position.set(sgn * 0.028, 0.04, 0);
+    arm.rotation.z = sgn * -0.55;
+    ab.add(arm);
+  }
+  ab.position.set(-0.015, 0.18, 0);
+  g.add(ab);
+  // "BLOCKED" emoji-equivalent: a red line that flashes when antibody is in place
+  const blockMat = new THREE.MeshBasicMaterial({ color: 0xff5050, transparent: true, opacity: 0 });
+  const block = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.005), blockMat);
+  block.position.set(-0.015, 0.06, 0.02);
+  block.rotation.z = Math.PI / 4;
+  g.add(block);
+  let t = 0;
+  return {
+    group: g,
+    update(dt) {
+      t += dt;
+      const phase = (t % 7.0) / 7.0;
+      if (phase < 0.40) {
+        // antibody dropping in
+        const p = phase / 0.40;
+        ab.position.y = THREE.MathUtils.lerp(0.22, 0.045, p);
+        ab.rotation.z = Math.sin(p * Math.PI) * 0.15;
+        blockMat.opacity = 0;
+      } else if (phase < 0.70) {
+        // blockade in place; PD-1/PD-L1 cannot meet
+        ab.position.y = 0.045;
+        ab.rotation.z = 0;
+        blockMat.opacity = 0.5 + Math.sin(t * 8) * 0.3;
+      } else {
+        // pulse + reset
+        const p = (phase - 0.70) / 0.30;
+        ab.position.y = THREE.MathUtils.lerp(0.045, 0.22, p);
+        blockMat.opacity = 0.5 * (1 - p);
+      }
+    }
+  };
+}
+
+// ---- Board container ----
+function buildBiotechDemoBoard() {
+  const g = new THREE.Group();
+  // Reuse the same cork + frame + legs proportions as the biotech-world board.
+  const cw = 512, ch = 384;
+  const corkCv = document.createElement('canvas');
+  corkCv.width = cw; corkCv.height = ch;
+  const cctx = corkCv.getContext('2d');
+  cctx.fillStyle = '#a87842';
+  cctx.fillRect(0, 0, cw, ch);
+  for (let i = 0; i < 4500; i++) {
+    const v = 95 + Math.floor(Math.random() * 90);
+    cctx.fillStyle = `rgb(${v + 30}, ${v}, ${Math.max(0, v - 25)})`;
+    cctx.beginPath();
+    cctx.arc(Math.random() * cw, Math.random() * ch, 1.2 + Math.random() * 2.4, 0, Math.PI * 2);
+    cctx.fill();
+  }
+  const corkTex = new THREE.CanvasTexture(corkCv);
+  corkTex.colorSpace = THREE.SRGBColorSpace;
+  corkTex.anisotropy = 8;
+  const corkMat = new THREE.MeshStandardMaterial({ map: corkTex, roughness: 0.95 });
+  const BW = 3.2, BH = 1.6, BD = 0.04;
+  const PANEL_Y = 1.55;
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BD), corkMat);
+  panel.position.y = PANEL_Y;
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+  g.add(panel);
+
+  // frame
+  const metalMat = new THREE.MeshStandardMaterial({ color: 0x8b9094, roughness: 0.5, metalness: 0.8 });
+  const fThick = 0.05;
+  for (const dy of [BH / 2, -BH / 2]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(BW + fThick * 2, fThick, BD + 0.014), metalMat);
+    rail.position.set(0, PANEL_Y + dy, 0);
+    g.add(rail);
+  }
+  for (const dx of [-(BW / 2 + fThick / 2), (BW / 2 + fThick / 2)]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(fThick, BH, BD + 0.014), metalMat);
+    rail.position.set(dx, PANEL_Y, 0);
+    g.add(rail);
+  }
+  // legs
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x6a6e74, roughness: 0.5, metalness: 0.85 });
+  const legPairX = BW * 0.36;
+  const legHeight = PANEL_Y - BH / 2;
+  for (const x of [-legPairX, legPairX]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, legHeight, 12), legMat);
+    leg.position.set(x, legHeight / 2, 0);
+    g.add(leg);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.10, 0.028, 16), legMat);
+    foot.position.set(x, 0.014, 0);
+    g.add(foot);
+  }
+  const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, legPairX * 2, 10), legMat);
+  brace.position.set(0, 0.45, -0.05);
+  brace.rotation.z = Math.PI / 2;
+  g.add(brace);
+
+  // ---- "Specimen card" — flat off-white plate on the cork with a title ----
+  const tcv = document.createElement('canvas');
+  tcv.width = 1280; tcv.height = 640;
+  const tctx = tcv.getContext('2d');
+  tctx.fillStyle = '#f2ece0';
+  tctx.fillRect(0, 0, 1280, 640);
+  // soft inner border
+  tctx.strokeStyle = 'rgba(80, 65, 40, 0.18)';
+  tctx.lineWidth = 2;
+  tctx.strokeRect(18, 18, 1280 - 36, 640 - 36);
+  // title
+  tctx.fillStyle = '#1f1812';
+  tctx.font = '600 56px "Inter", system-ui, sans-serif';
+  tctx.textAlign = 'left';
+  tctx.fillText('Biotech demos', 50, 80);
+  tctx.font = '300 18px "Inter", system-ui, sans-serif';
+  tctx.fillStyle = '#5c4f3a';
+  tctx.fillText('click a specimen to rotate it — E or ESC to step back', 50, 108);
+  const cardTex = new THREE.CanvasTexture(tcv);
+  cardTex.colorSpace = THREE.SRGBColorSpace;
+  cardTex.anisotropy = 8;
+  const cardMat = new THREE.MeshStandardMaterial({ map: cardTex, roughness: 0.85 });
+  const MW = BW * 0.86, MH = BH * 0.78;
+  const card = new THREE.Mesh(new THREE.PlaneGeometry(MW, MH), cardMat);
+  card.position.set(0, PANEL_Y, BD / 2 + 0.001);
+  g.add(card);
+
+  // ---- Build + mount the 7 demos ----
+  // Layout: 4 across in the top row, 3 across in the bottom row.
+  const DEMO_FACTORIES = [
+    { build: buildDemoPCR,       name: 'PCR thermocycler',
+      desc: "A 96-well bench thermocycler. Heats and cools the sample block in programmed cycles — denaturing DNA, annealing primers, extending strands — to amplify a target sequence millions of times. The lid lifts to reveal the wells; the block tints cool → warm as it cycles." },
+    { build: buildDemoRibosome,  name: 'mRNA translation',
+      desc: "An mRNA strand feeds through a ribosome's two subunits; each codon is read and the matching amino acid is added to a growing peptide chain that extrudes out the top. This is how every protein in your body — including biologic drugs made in cells — gets built." },
+    { build: buildDemoAntibody,  name: 'Antibody binding a receptor',
+      desc: "A Y-shaped antibody approaches a tumour-cell receptor and locks its two Fab arms onto the target. The fit is exquisitely specific — antibodies are how the immune system tags individual molecules, and how monoclonal-antibody drugs (most of biotech's biggest sellers) work." },
+    { build: buildDemoCART,      name: 'CAR-T killing a tumour cell',
+      desc: "A CAR-T cell — a patient's T-cell, re-engineered ex vivo with a chimeric antigen receptor — recognises an antigen on the tumour, docks, and releases perforin / granzyme granules that punch holes in the tumour and trigger apoptosis." },
+    { build: buildDemoCRISPR,    name: 'CRISPR-Cas9 cutting DNA',
+      desc: "The Cas9 endonuclease, guided by a short RNA matching the target sequence, finds the right spot on a DNA double helix and snips both strands. The cell's own repair machinery then either disables the gene or splices in a corrected version." },
+    { build: buildDemoADC,       name: 'ADC internalisation',
+      desc: "An antibody-drug conjugate (ADC): a monoclonal antibody chemically linked to a potent cytotoxic payload. The antibody binds a tumour-specific receptor; the whole complex is dragged into the cell, the linker cleaves, and the payload is released inside." },
+    { build: buildDemoPD1,       name: 'PD-1 / PD-L1 checkpoint blockade',
+      desc: "Tumour cells display PD-L1, which engages PD-1 on T-cells and tells them to stand down. A checkpoint-inhibitor antibody (like Keytruda) plugs into PD-1 or PD-L1, blocking the handshake — and the T-cell is free to kill the tumour." },
+  ];
+  const positions = [
+    // top row (y = +0.28), 4 columns
+    [-0.96,  0.30], [-0.32,  0.30], [ 0.32,  0.30], [ 0.96,  0.30],
+    // bottom row (y = -0.28), 3 columns
+    [-0.64, -0.30], [ 0.00, -0.30], [ 0.64, -0.30],
+  ];
+  const HOME_SCALE = 0.45;          // size on the board
+  const items = [];
+  for (let i = 0; i < DEMO_FACTORIES.length; i++) {
+    const f = DEMO_FACTORIES[i];
+    const { group: itemGroup, update } = f.build();
+    itemGroup.scale.setScalar(HOME_SCALE);
+    const [lx, ly] = positions[i];
+    const homeLocal = new THREE.Vector3(lx, PANEL_Y + ly, BD / 2 + 0.06);
+    itemGroup.position.copy(homeLocal);
+    // tag every descendant mesh with the demo index for raycast lookup
+    itemGroup.traverse(o => {
+      if (o.isMesh) {
+        o.userData.demoIdx = i;
+        o.userData.isDemoItem = true;
+      }
+    });
+    g.add(itemGroup);
+    items.push({
+      idx: i,
+      name: f.name,
+      desc: f.desc,
+      group: itemGroup,
+      update,
+      homeLocal,
+      homeScale: HOME_SCALE,
+      // demo target: floats further in front of the board, centred, larger
+      demoLocal: new THREE.Vector3(0, PANEL_Y, BD / 2 + 0.55),
+      demoScale: 1.0,
+    });
+  }
+  g.userData.BW = BW; g.userData.BH = BH; g.userData.BD = BD;
+  g.userData.MW = MW; g.userData.MH = MH;
+  g.userData.PANEL_Y = PANEL_Y;
+  g.userData.realistic = false;
+  g.userData.demoBoard = true;
+  g.userData.demoItems = items;
+  return g;
+}
+
 function buildProjectsScene() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x222a36);
@@ -5050,12 +5857,13 @@ function buildProjectsScene() {
   openBook.visible = false;
   scene.add(openBook);
 
-  // standing cork boards with world maps, off to the left of the bench/crates.
+  // standing cork boards, off to the left of the bench/crates.
   // Two boards side-by-side, both rotated anticlockwise so the long display
-  // faces in toward the room.  Board A keeps the stylised painted map;
-  // board B becomes the interactive realistic (Google Maps) map when zoomed.
+  // faces in toward the room.  Board A hosts mounted "biotech demos" the
+  // player can click to rotate/explore; board B is the realistic biotech
+  // world map with HQ pins.
   const BOARD_ANGLE = Math.PI / 2;       // anticlockwise from previous Math.PI/4 by 45°
-  const corkBoardA = buildCorkBoardWithMap({ realistic: false });
+  const corkBoardA = buildBiotechDemoBoard();
   const corkBoardB = buildCorkBoardWithMap({ realistic: true });
   const BW = corkBoardA.userData.BW;
   // shared face/side vectors (boards face +face direction, lined up along +side)
@@ -5091,6 +5899,9 @@ function buildProjectsScene() {
       // biotech-pin metadata (only present on the realistic board)
       companies: b.userData.companies || [],
       pins: b.userData.companyPins || [],
+      // demo-board metadata (only present on the stylised demo board)
+      demoBoard: !!b.userData.demoBoard,
+      demoItems: b.userData.demoItems || [],
     };
   });
 
@@ -5640,6 +6451,162 @@ html { scroll-behavior: smooth; }
     _bpClose();
   });
 
+  // ---- Biotech-demo board: hover tooltip + click → rotatable demo view ----
+  const dmEl       = document.getElementById('demo-overlay');
+  const dmTitleEl  = dmEl.querySelector('.dm-title');
+  const dmDescEl   = dmEl.querySelector('.dm-desc');
+  const _demoRaycaster = new THREE.Raycaster();
+  const _demoNDC       = new THREE.Vector2();
+  let _demoHoverIdx    = -1;
+  let _demoDragging    = false;
+  let _demoDragLastX   = 0;
+  let _demoDownX       = 0;
+  let _demoDownY       = 0;
+  let _demoJustDragged = false;       // true after a real drag — suppress next click
+  let _demoIdleT       = 0;          // seconds since last drag input
+  let _demoRotY        = 0;          // accumulated rotation around Y
+
+  // Public state on projectsWorld so the update loop can read it
+  projectsWorld.demoActive   = false;
+  projectsWorld.demoItem     = null;
+  projectsWorld.demoEnterT   = 0;    // 0..1, animation progress entering
+  projectsWorld.demoExitT    = 0;    // 0..1, animation progress exiting
+
+  function _demoItemAt(clientX, clientY) {
+    if (!projectsWorld.boardActive) return null;
+    const board = projectsWorld.activeBoard;
+    if (!board || !board.demoBoard || !board.demoItems.length) return null;
+    _demoNDC.x = (clientX / window.innerWidth)  * 2 - 1;
+    _demoNDC.y = -(clientY / window.innerHeight) * 2 + 1;
+    _demoRaycaster.setFromCamera(_demoNDC, projectsWorld.camera);
+    // gather all meshes from every demo item
+    const targets = [];
+    for (const it of board.demoItems) {
+      it.group.traverse(o => { if (o.isMesh) targets.push(o); });
+    }
+    const hits = _demoRaycaster.intersectObjects(targets, false);
+    if (!hits.length) return null;
+    const idx = hits[0].object.userData.demoIdx;
+    if (idx == null) return null;
+    return board.demoItems[idx];
+  }
+
+  function _demoOpen(item) {
+    projectsWorld.demoActive = true;
+    projectsWorld.demoItem   = item;
+    projectsWorld.demoEnterT = 0;
+    projectsWorld.demoExitT  = 0;
+    _demoRotY = 0;
+    _demoIdleT = 0;
+    item.group.rotation.set(0, 0, 0);
+    // panel content + position (right side of the screen, vertically centred)
+    dmTitleEl.textContent = item.name;
+    dmDescEl.textContent  = item.desc;
+    dmEl.classList.remove('as-tooltip');
+    dmEl.classList.add('as-panel');
+    document.body.style.cursor = 'grab';
+    // position the panel a moment later so its measured width is final
+    requestAnimationFrame(() => {
+      const r = dmEl.getBoundingClientRect();
+      const cw = r.width  || 340;
+      const ch = r.height || 240;
+      dmEl.style.left = `${window.innerWidth - cw - 24}px`;
+      dmEl.style.top  = `${Math.max(24, (window.innerHeight - ch) / 2)}px`;
+      dmEl.style.transform = '';
+    });
+  }
+  function _demoClose() {
+    if (!projectsWorld.demoActive && !projectsWorld.demoItem) return;
+    // Trigger reverse animation; the update loop finishes the cleanup.
+    projectsWorld.demoActive = false;
+    projectsWorld.demoExitT  = 0;
+    dmEl.classList.remove('as-panel');
+    dmEl.classList.remove('as-tooltip');
+    document.body.style.cursor = '';
+    _demoDragging = false;
+  }
+  projectsWorld.closeDemoView = _demoClose;
+
+  // Pointermove → tooltip (when not in demo) + drag rotation (when in demo).
+  window.addEventListener('pointermove', (ev) => {
+    if (projectsWorld.demoActive && _demoDragging && projectsWorld.demoItem) {
+      const dx = ev.clientX - _demoDragLastX;
+      _demoDragLastX = ev.clientX;
+      _demoRotY += dx * 0.008;
+      _demoIdleT = 0;
+      // moved enough → treat the following click as drag-end, not a real click
+      if (Math.abs(ev.clientX - _demoDownX) + Math.abs(ev.clientY - _demoDownY) > 5) {
+        _demoJustDragged = true;
+      }
+      return;
+    }
+    if (projectsWorld.demoActive) return;     // panel open; don't show tooltip
+    // hover tooltip in BOARD VIEW for demo items
+    if (!projectsWorld.boardActive) {
+      if (_demoHoverIdx !== -1) { dmEl.classList.remove('as-tooltip'); _demoHoverIdx = -1; document.body.style.cursor = ''; }
+      return;
+    }
+    const board = projectsWorld.activeBoard;
+    if (!board || !board.demoBoard) {
+      if (_demoHoverIdx !== -1) { dmEl.classList.remove('as-tooltip'); _demoHoverIdx = -1; document.body.style.cursor = ''; }
+      return;
+    }
+    const hit = _demoItemAt(ev.clientX, ev.clientY);
+    if (hit) {
+      dmTitleEl.textContent = hit.name;
+      dmDescEl.textContent  = '';
+      dmEl.classList.remove('as-panel');
+      dmEl.classList.add('as-tooltip');
+      dmEl.style.left = `${ev.clientX}px`;
+      dmEl.style.top  = `${ev.clientY}px`;
+      dmEl.style.transform = '';
+      _demoHoverIdx = hit.idx;
+      document.body.style.cursor = 'pointer';
+    } else if (_demoHoverIdx !== -1) {
+      dmEl.classList.remove('as-tooltip');
+      _demoHoverIdx = -1;
+      document.body.style.cursor = '';
+    }
+  });
+
+  // Pointerdown → start drag in demo view (anywhere on canvas, not on panel)
+  window.addEventListener('pointerdown', (ev) => {
+    if (!projectsWorld.demoActive) return;
+    if (dmEl.contains(ev.target)) return;
+    _demoDragging   = true;
+    _demoDragLastX  = ev.clientX;
+    _demoDownX      = ev.clientX;
+    _demoDownY      = ev.clientY;
+    _demoJustDragged = false;
+    document.body.style.cursor = 'grabbing';
+    _demoIdleT = 0;
+  });
+  window.addEventListener('pointerup', () => {
+    if (!_demoDragging) return;
+    _demoDragging = false;
+    document.body.style.cursor = projectsWorld.demoActive ? 'grab' : '';
+  });
+
+  // Click → open demo (BOARD VIEW only) or close if clicking outside (demo view).
+  // Suppress the "click" that fires right after a drag, so dragging doesn't
+  // close the demo.
+  window.addEventListener('click', (ev) => {
+    if (dmEl.contains(ev.target)) return;
+    if (bpEl.contains(ev.target))  return;   // bp overlay has its own logic
+    if (projectsWorld.demoActive) {
+      if (_demoJustDragged) { _demoJustDragged = false; return; }
+      // A pin-style click on a different demo item could also switch; for now,
+      // any non-drag click outside the panel closes back to the board view.
+      _demoClose();
+      return;
+    }
+    if (!projectsWorld.boardActive) return;
+    const board = projectsWorld.activeBoard;
+    if (!board || !board.demoBoard) return;
+    const hit = _demoItemAt(ev.clientX, ev.clientY);
+    if (hit) _demoOpen(hit);
+  });
+
   // ---- Whack-a-mole score overlay ----
   const gameScoreEl = document.createElement('div');
   gameScoreEl.id = 'game-score';
@@ -5819,6 +6786,7 @@ html { scroll-behavior: smooth; }
       projectsWorld.boxActive = false;
       projectsWorld.boardActive = false;
       if (projectsWorld.closeBoardCard) projectsWorld.closeBoardCard();
+      if (projectsWorld.closeDemoView) projectsWorld.closeDemoView();
       // also restore any open crate
       if (projectsWorld.crates) {
         for (const crate of projectsWorld.crates) {
@@ -7168,11 +8136,70 @@ html { scroll-behavior: smooth; }
       resetWalk(b);
       resetHead(b);
 
+      // ---- Demo-board: animate the active item & drive its rotation ----
+      const demoItem = projectsWorld.demoItem;
+      let demoFocusWorld = null;
+      if (board.demoBoard && demoItem) {
+        if (projectsWorld.demoActive) {
+          // entering: ease from "home" (mounted on board) to "demo" (floating in front, larger)
+          projectsWorld.demoEnterT = Math.min(1, projectsWorld.demoEnterT + dt / 0.55);
+          const u = projectsWorld.demoEnterT;
+          const e = u * u * (3 - 2 * u);            // smoothstep
+          const fromP = demoItem.homeLocal, toP = demoItem.demoLocal;
+          demoItem.group.position.set(
+            THREE.MathUtils.lerp(fromP.x, toP.x, e),
+            THREE.MathUtils.lerp(fromP.y, toP.y, e),
+            THREE.MathUtils.lerp(fromP.z, toP.z, e)
+          );
+          demoItem.group.scale.setScalar(
+            THREE.MathUtils.lerp(demoItem.homeScale, demoItem.demoScale, e)
+          );
+          // drag/idle rotation
+          if (!_demoDragging) _demoIdleT += dt;
+          if (_demoIdleT > 1.5) _demoRotY += dt * 0.35;
+          demoItem.group.rotation.set(0, _demoRotY, 0);
+          // run the item's own MOA / equipment animation
+          if (demoItem.update) demoItem.update(dt);
+          // capture the item's world position for the camera focus
+          demoFocusWorld = new THREE.Vector3();
+          demoItem.group.getWorldPosition(demoFocusWorld);
+        } else if (projectsWorld.demoExitT < 1) {
+          // exiting: ease back to home, then drop the demoItem reference
+          projectsWorld.demoExitT = Math.min(1, projectsWorld.demoExitT + dt / 0.55);
+          const u = projectsWorld.demoExitT;
+          const e = u * u * (3 - 2 * u);
+          const startU = projectsWorld.demoEnterT;     // where we were when closed
+          const fromP = demoItem.homeLocal, toP = demoItem.demoLocal;
+          const blend = startU * (1 - e);              // collapse back toward 0
+          demoItem.group.position.set(
+            THREE.MathUtils.lerp(fromP.x, toP.x, blend),
+            THREE.MathUtils.lerp(fromP.y, toP.y, blend),
+            THREE.MathUtils.lerp(fromP.z, toP.z, blend)
+          );
+          demoItem.group.scale.setScalar(
+            THREE.MathUtils.lerp(demoItem.homeScale, demoItem.demoScale, blend)
+          );
+          demoItem.group.rotation.set(0, _demoRotY * (1 - e), 0);
+          if (projectsWorld.demoExitT >= 1) {
+            // snap to clean state at end
+            demoItem.group.position.copy(demoItem.homeLocal);
+            demoItem.group.scale.setScalar(demoItem.homeScale);
+            demoItem.group.rotation.set(0, 0, 0);
+            projectsWorld.demoItem    = null;
+            projectsWorld.demoEnterT  = 0;
+            projectsWorld.demoExitT   = 0;
+          }
+        }
+      }
+
       // Camera: float back along the face direction, lined up with the panel.
       // When a pin is clicked (zoomedPinWorld set), tighten in on the country.
+      // When the demo is active, focus the active demo item.
       const zoomed = !!projectsWorld.zoomedPinWorld;
-      const focus  = zoomed ? projectsWorld.zoomedPinWorld : board.mapCentre;
-      const camDist = zoomed ? 0.55 : 2.0;
+      const inDemo = !!demoFocusWorld;
+      const focus  = inDemo ? demoFocusWorld
+                   : (zoomed ? projectsWorld.zoomedPinWorld : board.mapCentre);
+      const camDist = inDemo ? 0.95 : (zoomed ? 0.55 : 2.0);
       const camTargetPos = new THREE.Vector3(
         focus.x + board.faceDir.x * camDist,
         focus.y + 0.05,
@@ -7181,7 +8208,7 @@ html { scroll-behavior: smooth; }
       const camTargetLook = focus.clone();
       // Faster lerp when zooming (so the country swooshes in) than when
       // returning to the full-board view.
-      const lerpHalfLifeMs = zoomed ? 0.0006 : 0.001;
+      const lerpHalfLifeMs = (zoomed || inDemo) ? 0.0006 : 0.001;
       const kk = 1 - Math.pow(lerpHalfLifeMs, dt);
       projectsWorld.camPos.lerp(camTargetPos, kk);
       projectsWorld.camLook.lerp(camTargetLook, kk);
@@ -7193,10 +8220,16 @@ html { scroll-behavior: smooth; }
       // press E or ESC to exit (auto-repeat-guarded by eHeld)
       if (keys['e'] || keys['escape']) {
         if (!projectsWorld.eHeld) {
-          projectsWorld.boardActive = false;
-          if (projectsWorld.closeBoardCard) projectsWorld.closeBoardCard();
-          unstickProjectsBaymax(b);
-          restoreParentFocus();
+          // demo view first → board view → out
+          if (projectsWorld.demoActive) {
+            if (projectsWorld.closeDemoView) projectsWorld.closeDemoView();
+          } else {
+            projectsWorld.boardActive = false;
+            if (projectsWorld.closeBoardCard) projectsWorld.closeBoardCard();
+            if (projectsWorld.closeDemoView) projectsWorld.closeDemoView();
+            unstickProjectsBaymax(b);
+            restoreParentFocus();
+          }
         }
         projectsWorld.eHeld = true;
       } else {
