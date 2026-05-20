@@ -3770,147 +3770,440 @@ function buildCorkBoardWithMap(opts = {}) {
     const LAND_FILL   = '#9bbf86';
     const LAND_STROKE = '#48584a';
 
-    // ----- Continent polygons (lon, lat) — eyeballed but reasonably faithful -----
-    // North America (Alaska + mainland + Mexico)
+    // ===== Continent polygons (lon, lat) =====
+    // Hand-traced from a school-atlas world map.  Each polygon walks the
+    // coastline at roughly 3–8 vertices per major feature; not survey-grade
+    // but the recognisable silhouette of every continent is in here.
+
+    // ---- North America (mainland) ----
     drawPolygon([
-      [-168, 65], [-166, 68], [-156, 71], [-141, 70], [-140, 60], [-135, 58],
-      [-130, 54], [-128, 52], [-124, 48], [-124, 42], [-122, 37], [-118, 33],
-      [-117, 32.5], [-114, 32], [-110, 30], [-108, 26], [-106, 23], [-105, 20],
-      [-100, 17], [-95, 16], [-92, 15], [-88, 16], [-87, 13], [-83, 9],
-      [-79, 8], [-78, 11], [-82, 14], [-87, 16], [-91, 19], [-91, 21],
-      [-87, 21], [-83, 23], [-82, 25], [-80, 25], [-80, 27], [-81, 31],
-      [-76, 35], [-75, 38], [-72, 41], [-67, 44], [-65, 46], [-60, 46],
-      [-56, 51], [-58, 54], [-62, 56], [-67, 55], [-71, 56], [-77, 56],
-      [-79, 62], [-87, 65], [-94, 68], [-105, 70], [-115, 73], [-125, 71],
-      [-130, 70], [-141, 70], [-152, 70], [-160, 68], [-168, 66]
+      // Panama / Caribbean side, walking north
+      [-77.5,  8.5], [-79.7,  9.5], [-82.5, 10.2], [-83.5, 11.0],
+      [-84.0, 12.4], [-83.5, 13.9], [-83.2, 15.0], [-85.0, 16.0],
+      [-86.5, 15.9], [-88.0, 15.9], [-88.7, 17.5], [-88.0, 18.5],
+      [-87.5, 20.3], [-86.7, 21.6], [-89.0, 21.6], [-90.4, 21.0],
+      [-91.5, 19.2], [-94.0, 18.6], [-95.5, 18.7], [-96.5, 19.5],
+      [-97.4, 21.3], [-97.6, 23.8], [-97.4, 25.9], [-97.1, 26.0],
+      // Texas → Louisiana → Mississippi delta
+      [-95.5, 28.7], [-94.6, 29.4], [-93.7, 29.7], [-91.5, 29.5],
+      [-90.0, 29.2], [-89.2, 29.0], [-88.9, 30.4], [-87.5, 30.4],
+      [-85.7, 29.8], [-84.5, 30.0], [-83.4, 29.7], [-82.8, 28.4],
+      // Florida peninsula
+      [-82.6, 27.5], [-81.9, 26.4], [-81.5, 25.4], [-80.9, 25.1],
+      [-80.1, 25.4], [-80.1, 26.5], [-80.4, 27.8], [-80.8, 28.5],
+      [-81.3, 30.5], [-80.9, 32.1], [-79.5, 33.2], [-77.9, 34.2],
+      [-76.5, 34.8], [-75.5, 35.2], [-76.2, 36.9], [-75.1, 38.0],
+      [-74.0, 39.4], [-74.0, 40.5], [-71.9, 41.0], [-71.0, 41.3],
+      [-70.7, 41.6], [-70.0, 41.9], [-69.9, 42.0], [-70.6, 42.5],
+      [-70.7, 43.6], [-70.0, 44.5], [-67.0, 44.7], [-66.0, 45.0],
+      // Bay of Fundy → Nova Scotia
+      [-65.0, 45.5], [-64.5, 46.5], [-63.0, 45.7], [-61.0, 45.5],
+      [-60.0, 46.0], [-60.0, 47.0], [-59.7, 47.7], [-58.0, 47.5],
+      // Newfoundland (treat as mainland for simplicity)
+      [-55.7, 47.6], [-53.0, 46.8], [-52.7, 47.5], [-53.2, 49.0],
+      [-55.5, 51.6], [-56.5, 52.0],
+      // Labrador
+      [-56.0, 53.5], [-58.0, 54.8], [-60.0, 56.5], [-62.0, 58.0],
+      [-63.5, 59.5], [-64.5, 60.4],
+      // Ungava (enter Hudson Strait)
+      [-66.0, 60.0], [-69.0, 60.0], [-71.5, 60.8], [-74.0, 61.6],
+      [-78.0, 62.0], [-78.5, 63.5], [-78.5, 65.0], [-82.0, 66.0],
+      [-86.0, 67.0], [-92.0, 68.0], [-94.0, 68.8], [-98.0, 69.0],
+      [-101.5, 69.5], [-107.0, 69.0], [-114.0, 69.0], [-117.0, 69.6],
+      [-122.0, 70.0], [-129.0, 70.0], [-134.0, 70.2], [-141.0, 70.0],
+      // Alaska north slope
+      [-146.0, 70.5], [-152.0, 70.7], [-156.5, 71.4], [-160.0, 70.8],
+      [-163.0, 70.1], [-166.0, 68.7], [-168.0, 66.0],
+      // Bering Strait region
+      [-166.5, 64.8], [-163.5, 64.5], [-161.0, 63.5], [-162.0, 60.5],
+      [-165.5, 59.7], [-167.0, 58.5], [-163.0, 57.0], [-159.0, 55.7],
+      [-155.5, 56.8], [-152.5, 58.5], [-150.0, 59.5], [-149.0, 60.5],
+      [-147.0, 60.5], [-144.5, 60.0], [-140.5, 59.5], [-137.0, 58.5],
+      [-134.5, 57.0], [-131.5, 55.0], [-130.0, 54.0], [-128.0, 52.5],
+      [-125.5, 50.1], [-124.7, 48.4], [-124.0, 46.0], [-123.9, 42.0],
+      [-122.5, 38.5], [-121.0, 36.5], [-118.5, 34.0], [-117.3, 32.7],
+      // Baja California (no Sea of Cortez — Baja treated as solid)
+      [-115.5, 30.0], [-114.0, 27.0], [-112.5, 24.8], [-110.0, 23.0],
+      // back up Sea of Cortez (east shore) and onto the mainland Mexico coast
+      [-108.5, 25.5], [-110.0, 28.5], [-114.0, 31.5], [-113.5, 32.5],
+      [-111.0, 31.0], [-108.0, 26.0], [-105.5, 21.5], [-103.5, 18.6],
+      [-100.5, 17.2], [-97.5, 16.0], [-94.0, 16.2], [-92.0, 14.7],
+      [-90.5, 14.0], [-89.0, 13.6], [-87.5, 13.2], [-85.5, 11.0],
+      [-83.5,  8.5], [-80.0,  7.6], [-77.5,  8.5]
     ], LAND_FILL, LAND_STROKE);
-    // Hudson Bay (carve)
+    // Hudson Bay carved out of the mainland
     drawPolygon([
-      [-95, 62], [-82, 62], [-78, 58], [-78, 53], [-82, 51], [-92, 53], [-95, 57]
+      [-94.0, 58.5], [-92.0, 60.5], [-88.0, 62.0], [-82.0, 62.3],
+      [-79.0, 60.5], [-78.5, 58.5], [-79.0, 56.0], [-82.0, 53.0],
+      [-85.0, 51.5], [-88.0, 53.5], [-92.0, 56.5]
     ], '#eef3f5', null);
-    // Greenland
-    drawPolygon([
-      [-55, 83], [-30, 84], [-22, 80], [-22, 70], [-30, 60], [-42, 59],
-      [-50, 62], [-55, 70], [-58, 76]
-    ], LAND_FILL, LAND_STROKE);
-    // Baffin / Ellesmere (rough single blob)
-    drawPolygon([
-      [-86, 76], [-78, 79], [-67, 81], [-62, 76], [-66, 70], [-78, 67], [-84, 70]
-    ], LAND_FILL, LAND_STROKE);
 
-    // South America
+    // ---- Greenland ----
     drawPolygon([
-      [-76, 11], [-72, 11], [-66, 11], [-60, 8], [-52, 5], [-50, 0],
-      [-46, -2], [-38, -8], [-35, -10], [-37, -16], [-39, -22], [-43, -24],
-      [-48, -28], [-54, -34], [-58, -38], [-62, -41], [-66, -45], [-70, -50],
-      [-72, -54], [-68, -55], [-65, -52], [-66, -47], [-69, -43], [-71, -38],
-      [-72, -32], [-71, -28], [-71, -22], [-72, -16], [-77, -12], [-80, -6],
-      [-80, -2], [-78, 1], [-78, 6], [-76, 9]
+      [-22.0, 70.0], [-19.5, 73.5], [-19.0, 76.5], [-22.0, 80.0],
+      [-28.0, 82.0], [-37.0, 83.3], [-45.0, 83.0], [-55.0, 82.5],
+      [-60.0, 81.5], [-62.0, 79.0], [-58.0, 76.0], [-55.0, 73.0],
+      [-53.0, 70.0], [-50.0, 67.0], [-49.0, 64.5], [-45.0, 60.0],
+      [-43.0, 59.8], [-41.0, 60.8], [-38.5, 64.0], [-35.0, 65.5],
+      [-28.0, 67.0], [-22.0, 70.0]
     ], LAND_FILL, LAND_STROKE);
-
+    // Baffin Island
+    drawPolygon([
+      [-78.0, 70.0], [-72.0, 73.0], [-66.0, 73.5], [-61.0, 71.5],
+      [-63.0, 68.5], [-67.0, 65.0], [-74.0, 65.5], [-78.0, 67.5]
+    ], LAND_FILL, LAND_STROKE);
+    // Ellesmere
+    drawPolygon([
+      [-89.0, 78.0], [-78.0, 80.0], [-68.0, 82.5], [-62.0, 81.5],
+      [-72.0, 77.5], [-82.0, 76.0]
+    ], LAND_FILL, LAND_STROKE);
     // Iceland
     drawPolygon([
-      [-24, 64], [-14, 64], [-13, 66], [-21, 67], [-24, 66]
+      [-22.5, 64.5], [-21.0, 63.5], [-15.5, 63.5], [-14.0, 64.6],
+      [-13.5, 65.8], [-16.0, 66.5], [-20.0, 66.5], [-23.0, 65.7], [-24.0, 64.8]
     ], LAND_FILL, LAND_STROKE);
 
-    // Europe (mainland) + British Isles + Scandinavia
+    // ---- South America ----
     drawPolygon([
-      [-10, 36], [-6, 36], [-3, 35], [0, 36], [5, 38], [10, 38], [13, 38],
-      [16, 41], [20, 40], [24, 40], [27, 38], [29, 41], [33, 45], [36, 45],
-      [40, 48], [42, 53], [40, 60], [33, 64], [27, 66], [20, 68], [16, 69],
-      [10, 64], [12, 62], [10, 58], [4, 58], [8, 55], [9, 53], [6, 51],
-      [3, 51], [-2, 49], [-5, 48], [-4, 44], [-9, 43], [-9, 40], [-7, 37]
-    ], LAND_FILL, LAND_STROKE);
-    // Italy peninsula
-    drawPolygon([
-      [10, 46], [14, 45], [17, 41], [18, 40], [15, 38], [11, 43]
-    ], LAND_FILL, LAND_STROKE);
-    // Britain
-    drawPolygon([
-      [-5, 50], [-3, 51], [1, 51], [2, 53], [0, 55], [-3, 58], [-5, 57], [-6, 55], [-5, 52]
-    ], LAND_FILL, LAND_STROKE);
-    // Ireland
-    drawPolygon([
-      [-10, 52], [-6, 51], [-6, 55], [-10, 55]
+      // Caribbean coast, going east
+      [-78.0,  8.0], [-76.0,  8.2], [-74.0,  9.2], [-72.0, 11.7],
+      [-70.5, 12.3], [-69.0, 11.5], [-66.0, 11.0], [-63.0, 10.7],
+      [-61.5, 10.0], [-60.0,  8.5], [-58.0,  7.0], [-54.5,  5.5],
+      [-51.5,  4.0], [-50.0,  1.8], [-48.0, -0.8], [-44.5, -2.5],
+      [-41.5, -3.0], [-38.5, -5.0], [-35.2, -5.5], [-35.0, -7.5],
+      [-37.0, -10.5], [-38.0, -13.0], [-38.8, -16.0], [-39.5, -19.0],
+      [-41.0, -22.0], [-43.0, -23.0], [-45.0, -23.5], [-48.0, -25.5],
+      [-48.5, -28.0], [-51.0, -30.5], [-53.0, -32.5], [-56.5, -34.5],
+      [-58.0, -35.5], [-57.0, -38.0], [-61.0, -39.0], [-62.5, -40.5],
+      [-63.5, -41.5], [-65.0, -42.0], [-65.0, -44.0], [-65.5, -45.5],
+      [-67.5, -47.5], [-69.0, -50.0], [-69.5, -52.5], [-68.5, -54.5],
+      [-66.0, -55.0], [-65.0, -53.5], [-67.0, -50.5], [-72.0, -50.5],
+      [-74.0, -52.0], [-74.5, -50.0], [-73.5, -46.0], [-74.5, -44.0],
+      [-73.0, -41.5], [-73.5, -39.5], [-73.5, -37.0], [-72.0, -35.0],
+      [-71.5, -33.5], [-71.5, -30.0], [-71.0, -25.0], [-70.5, -20.0],
+      [-71.0, -17.0], [-75.5, -16.0], [-77.5, -13.0], [-79.5, -10.0],
+      [-81.0,  -7.0], [-80.7,  -4.5], [-80.0,  -2.5], [-79.8,  -0.5],
+      [-78.5,   1.5], [-77.5,   4.0], [-77.0,   6.0], [-78.0,   8.0]
     ], LAND_FILL, LAND_STROKE);
 
-    // Africa
+    // ---- Africa ----
     drawPolygon([
-      [-17, 21], [-12, 28], [-6, 35], [0, 36], [10, 35], [20, 32], [25, 31],
-      [33, 31], [34, 28], [37, 22], [39, 17], [43, 12], [48, 12], [51, 11],
-      [49, 4], [45, 0], [42, -5], [39, -8], [40, -16], [40, -25], [33, -28],
-      [27, -33], [22, -34], [18, -34], [15, -28], [12, -18], [13, -12], [9, -5],
-      [9, 4], [2, 6], [-5, 5], [-8, 4], [-13, 9], [-17, 14]
+      // North coast (Mediterranean): Gibraltar → Egypt
+      [-5.5, 35.8], [-2.0, 35.2], [ 1.0, 36.5], [ 6.5, 36.8],
+      [10.0, 37.3], [11.0, 36.8], [11.5, 33.5], [15.5, 31.5],
+      [20.0, 31.0], [23.0, 32.0], [26.5, 31.5], [29.5, 31.3],
+      [32.0, 31.4], [33.5, 31.0],
+      // Sinai → Red Sea
+      [34.3, 28.0], [35.5, 24.0], [37.0, 22.0], [39.0, 19.5],
+      [40.5, 17.0], [42.5, 15.0], [43.5, 12.7],
+      // Horn of Africa
+      [44.0, 11.5], [47.0, 11.0], [49.0, 11.5], [51.4, 11.8],
+      [50.5,  9.5], [49.0,  6.0], [47.5,  3.5], [44.5,  0.5],
+      [42.0, -3.0], [40.5, -6.0], [39.5, -8.0], [40.5, -12.0],
+      [40.8, -16.0], [37.5, -18.0], [35.0, -22.0], [33.0, -26.0],
+      [31.5, -29.0], [29.5, -31.5], [27.0, -33.5], [22.5, -34.0],
+      [18.5, -34.5], [17.5, -32.0], [14.5, -27.0], [13.0, -22.0],
+      [12.5, -17.5], [13.5, -12.5], [13.5,  -8.0], [12.0,  -5.5],
+      [10.0,  -2.5], [ 9.0,   0.5], [ 9.5,   3.5], [ 8.5,   4.5],
+      [ 6.0,   4.5], [ 3.5,   6.5], [ 1.5,   6.2], [-1.0,   5.0],
+      [-3.0,   5.0], [-5.5,   4.5], [-7.5,   4.5], [-9.0,   5.5],
+      [-11.5,  6.5], [-13.5,  8.5], [-14.5, 11.0], [-16.5, 12.5],
+      [-17.0, 14.5], [-16.5, 17.0], [-16.0, 20.0], [-13.0, 21.0],
+      [-10.0, 26.0], [ -8.5, 28.0], [ -5.0, 30.0], [ -2.0, 32.5],
+      [-1.5, 35.0], [-5.5, 35.8]
     ], LAND_FILL, LAND_STROKE);
     // Madagascar
     drawPolygon([
-      [43, -12], [50, -16], [50, -22], [46, -25], [44, -22], [43, -16]
+      [49.5, -12.0], [50.2, -15.0], [50.0, -19.0], [47.0, -25.0],
+      [44.5, -25.5], [43.5, -22.0], [43.2, -17.0], [44.0, -13.0],
+      [46.0, -12.0]
     ], LAND_FILL, LAND_STROKE);
 
-    // Asia (mainland — vast polygon)
+    // ---- EURASIA (Europe + Asia + the Middle East as one mass) ----
     drawPolygon([
-      [26, 38], [29, 41], [33, 45], [38, 47], [42, 48], [48, 52], [55, 55],
-      [60, 60], [65, 66], [70, 68], [80, 72], [95, 78], [105, 78], [115, 75],
-      [125, 73], [135, 71], [142, 70], [150, 68], [160, 66], [170, 68],
-      [175, 65], [180, 65], [180, 60], [170, 60], [165, 58], [160, 60],
-      [155, 56], [142, 53], [140, 47], [135, 43], [130, 42], [127, 38],
-      [125, 38], [122, 39], [120, 37], [122, 32], [118, 30], [110, 22],
-      [108, 19], [105, 14], [108, 11], [108, 5], [103, 2], [100, 6], [97, 11],
-      [95, 16], [94, 22], [88, 22], [85, 25], [80, 22], [77, 22], [73, 24],
-      [70, 22], [68, 24], [64, 25], [60, 25], [56, 25], [50, 24], [44, 22],
-      [44, 13], [45, 12], [49, 12], [51, 11], [55, 13], [57, 22], [55, 27],
-      [48, 30], [45, 38], [40, 40], [36, 36], [32, 36], [29, 38]
+      // Iberia — Gibraltar → west coast → north coast (Bay of Biscay)
+      [-5.4, 35.9], [-6.3, 36.2], [-7.4, 37.0], [-9.0, 37.0],
+      [-9.5, 38.7], [-9.5, 41.5], [-9.2, 43.0], [-7.7, 43.8],
+      [-3.8, 43.5], [-1.7, 43.4],
+      // South France → Bay of Biscay
+      [-1.4, 44.5], [-1.1, 45.6], [-1.2, 46.5], [-2.2, 47.3],
+      [-3.5, 47.8], [-4.7, 48.4],
+      // Brittany north → Channel
+      [-3.7, 48.7], [-2.0, 48.8], [-1.4, 49.2], [-1.3, 49.7],
+      [ 0.2, 49.6], [ 1.6, 50.9],
+      // Belgium / Netherlands / North Germany
+      [ 2.5, 51.1], [ 3.4, 51.5], [ 4.2, 51.9], [ 4.5, 52.5],
+      [ 5.3, 53.0], [ 6.7, 53.5], [ 7.5, 53.7], [ 8.3, 53.9],
+      // Denmark (Jutland)
+      [ 8.4, 54.6], [ 8.1, 55.5], [ 8.3, 56.5], [ 9.0, 57.2],
+      [10.5, 57.7], [10.7, 56.7], [10.5, 56.0],
+      // Baltic — Skagerrak south coast → Germany → Poland → Baltic States
+      [12.5, 54.5], [14.0, 54.0], [16.0, 54.4], [18.5, 54.5],
+      [19.5, 54.5], [20.0, 55.2], [21.0, 55.5], [21.0, 56.5],
+      [21.3, 57.6], [23.0, 58.0], [24.0, 58.0], [24.5, 58.5],
+      [27.5, 58.5], [26.0, 59.5], [28.5, 60.5], [30.3, 60.0],
+      // Russia north — Karelia → Murmansk → Arctic
+      [29.0, 62.0], [30.5, 64.0], [29.5, 66.0], [29.5, 68.0],
+      [32.0, 69.5], [33.5, 69.5], [36.0, 67.5], [40.0, 66.0],
+      [44.0, 67.0], [44.0, 69.0], [50.0, 68.5], [55.0, 70.0],
+      [60.0, 72.5], [66.0, 71.5], [69.0, 73.5], [76.0, 73.0],
+      [85.0, 74.5], [95.0, 77.5], [105.0, 78.0], [110.0, 76.5],
+      [115.0, 74.0], [120.0, 73.0], [128.0, 73.5], [135.0, 72.0],
+      [142.0, 72.0], [148.0, 71.5], [155.0, 71.5], [160.0, 69.5],
+      [170.0, 69.5], [180.0, 68.0],
+      // Bering Strait (Asia side) → Kamchatka → Russian Far East coast
+      [180.0, 64.5], [175.0, 64.0], [172.0, 60.5], [166.0, 60.0],
+      [163.0, 59.5], [163.0, 56.0], [158.0, 53.0], [156.0, 51.5],
+      [158.0, 51.5], [161.0, 55.5], [161.0, 58.5], [156.0, 57.0],
+      [155.0, 50.5], [142.0, 48.5], [140.5, 46.5], [141.0, 44.0],
+      [137.5, 42.5], [132.5, 42.8], [131.0, 41.5],
+      // Korean peninsula
+      [130.0, 38.5], [129.5, 36.5], [128.7, 35.0], [126.5, 34.5],
+      [126.5, 36.5], [126.0, 38.0],
+      // Yellow Sea → China east coast
+      [124.0, 39.5], [121.5, 39.0], [119.5, 39.0], [117.5, 38.0],
+      [120.5, 36.5], [121.5, 33.0], [120.0, 32.0], [121.8, 30.5],
+      [121.0, 28.5], [119.5, 25.0], [116.5, 23.5], [114.0, 22.5],
+      [113.0, 21.5], [110.5, 21.0], [109.5, 18.5], [108.5, 16.5],
+      // Vietnam
+      [109.5, 12.5], [109.0, 10.5], [105.0, 10.0], [103.0, 11.0],
+      // Thailand peninsula → Malaysia tip
+      [101.0, 13.0], [99.5, 12.5], [100.0,  9.5], [101.5,  6.0],
+      [103.5,  3.0], [104.0,  1.3],
+      // back up Bay of Bengal (Myanmar coast)
+      [100.5,  2.0], [ 98.5,  6.5], [ 97.0, 10.5], [ 95.5, 15.5],
+      [ 94.0, 18.0], [ 93.0, 21.0], [ 90.5, 22.5],
+      // Bangladesh → east coast of India
+      [ 88.0, 22.0], [ 86.5, 21.0], [ 83.5, 18.0], [ 81.5, 15.0],
+      [ 80.5, 12.5], [ 79.0,  9.5], [ 77.5,  8.2],
+      // West coast India → Pakistan
+      [ 75.0,  9.0], [ 73.0, 16.0], [ 72.0, 19.5], [ 69.5, 22.5],
+      [ 67.0, 24.0], [ 63.0, 25.0], [ 59.5, 25.0],
+      // Iran → Persian Gulf
+      [ 56.5, 26.5], [ 54.0, 26.7], [ 51.5, 27.5], [ 49.0, 30.0],
+      [ 48.0, 30.5], [ 48.5, 29.0],
+      // Arabian peninsula east + south
+      [ 50.5, 27.0], [ 52.0, 25.0], [ 54.5, 24.5], [ 56.5, 24.0],
+      [ 56.0, 22.5], [ 55.0, 20.0], [ 52.5, 19.0], [ 53.5, 16.5],
+      [ 50.5, 15.0], [ 48.0, 14.0], [ 45.0, 12.7], [ 43.5, 12.7],
+      // Red Sea (east shore) → Sinai
+      [ 43.5, 16.5], [ 42.5, 19.0], [ 41.0, 21.0], [ 39.0, 22.0],
+      [ 37.0, 25.0], [ 35.5, 27.0], [ 34.6, 28.0], [ 34.3, 31.5],
+      // Levant → Turkey south → Aegean
+      [ 35.0, 33.0], [ 35.5, 35.0], [ 36.5, 36.5], [ 35.5, 36.8],
+      [ 32.0, 36.5], [ 30.0, 36.8], [ 28.5, 37.0], [ 27.0, 37.5],
+      [ 26.5, 38.5], [ 27.0, 40.5], [ 28.5, 41.0], [ 29.5, 41.5],
+      // Black Sea → Crimea
+      [ 31.5, 41.5], [ 35.0, 42.0], [ 39.5, 41.5], [ 41.5, 42.5],
+      [ 40.5, 43.5], [ 38.0, 45.0], [ 36.5, 45.5], [ 33.5, 45.0],
+      [ 32.5, 46.5], [ 31.0, 46.5], [ 30.0, 46.0],
+      // Balkans → Adriatic → Italy boot intentionally drawn as a separate polygon
+      [ 28.5, 41.5], [ 26.0, 40.0], [ 23.5, 40.5], [ 22.5, 40.0],
+      [ 23.0, 38.0], [ 21.5, 38.5], [ 19.5, 40.0], [ 18.5, 41.5],
+      [ 16.5, 42.5], [ 15.0, 44.0], [ 13.5, 45.5],
+      // France south Mediterranean → Iberia east coast → back to Gibraltar
+      [ 12.5, 45.7], [  8.5, 44.5], [  5.0, 43.5], [  3.0, 43.0],
+      [  0.5, 42.5], [ -1.0, 41.0], [ -0.5, 39.0], [ -0.5, 37.5],
+      [ -2.0, 36.7], [ -5.4, 35.9]
     ], LAND_FILL, LAND_STROKE);
-    // Indian peninsula
+
+    // ---- Standalone European islands & peninsulas (drawn over Eurasia) ----
+    // Great Britain
     drawPolygon([
-      [70, 22], [72, 22], [78, 21], [80, 15], [78, 8], [76, 9], [73, 15], [72, 20]
+      [-3.0, 50.7], [-1.5, 50.7], [ 0.0, 50.8], [ 1.5, 51.4],
+      [ 1.0, 52.6], [ 1.6, 52.9], [ 0.0, 53.5], [-0.5, 54.6],
+      [-1.2, 55.0], [-1.5, 55.6], [-2.0, 56.5], [-3.0, 57.5],
+      [-3.5, 58.5], [-5.0, 58.7], [-5.7, 57.5], [-6.0, 56.0],
+      [-5.0, 55.0], [-5.0, 54.4], [-4.5, 53.4], [-3.0, 53.4],
+      [-4.5, 51.7], [-5.5, 50.2], [-4.0, 50.2]
     ], LAND_FILL, LAND_STROKE);
-    // Japan
-    drawPolygon([[140, 45], [144, 43], [141, 39], [136, 35], [132, 34], [130, 32], [131, 31], [135, 33], [138, 35], [141, 38]], LAND_FILL, LAND_STROKE);
+    // Ireland
+    drawPolygon([
+      [-10.5, 51.5], [ -8.0, 51.5], [ -6.0, 52.2], [ -6.0, 53.2],
+      [ -6.5, 54.5], [ -8.5, 55.3], [-10.2, 54.6], [-10.5, 53.5],
+      [-10.0, 52.5]
+    ], LAND_FILL, LAND_STROKE);
+    // Italian peninsula (boot) — drawn over Eurasia
+    drawPolygon([
+      [ 7.5, 44.0], [ 8.8, 44.4], [10.0, 44.0], [12.5, 44.0],
+      [13.8, 43.0], [14.0, 42.0], [14.5, 41.5], [15.0, 40.0],
+      [17.5, 40.5], [18.5, 40.0], [17.0, 39.0], [16.0, 37.9],
+      [15.7, 38.2], [15.6, 39.9], [14.0, 40.6], [13.0, 41.0],
+      [11.5, 42.5], [10.0, 43.5], [ 8.5, 43.5]
+    ], LAND_FILL, LAND_STROKE);
+    // Sicily
+    drawPolygon([
+      [12.5, 37.8], [15.6, 38.3], [15.3, 37.1], [12.6, 37.5]
+    ], LAND_FILL, LAND_STROKE);
+    // Sardinia + Corsica (drawn as two polygons separated by a strait)
+    drawPolygon([
+      [8.5, 41.0], [9.7, 41.2], [9.7, 39.0], [8.5, 39.0]
+    ], LAND_FILL, LAND_STROKE);
+    drawPolygon([
+      [8.7, 41.5], [9.5, 41.5], [9.5, 43.0], [8.6, 42.7]
+    ], LAND_FILL, LAND_STROKE);
+    // Crete
+    drawPolygon([
+      [23.5, 35.3], [26.5, 35.5], [26.0, 35.0], [23.7, 34.9]
+    ], LAND_FILL, LAND_STROKE);
+    // Cyprus
+    drawPolygon([
+      [32.3, 34.6], [34.6, 35.7], [33.5, 35.4], [32.4, 35.0]
+    ], LAND_FILL, LAND_STROKE);
+
+    // ---- Asian standalone landforms ----
     // Sri Lanka
-    drawPolygon([[80, 9], [82, 8], [82, 6], [80, 6]], LAND_FILL, LAND_STROKE);
-
-    // SE Asian islands — Indonesia, Borneo, Sumatra, New Guinea
-    drawPolygon([[95, 6], [98, 4], [102, 1], [106, -3], [105, -6], [100, -2], [96, 3]], LAND_FILL, LAND_STROKE); // Sumatra
-    drawPolygon([[108, 1], [114, 1], [118, 0], [118, -3], [114, -4], [110, -3], [108, -1]], LAND_FILL, LAND_STROKE); // Borneo
-    drawPolygon([[122, 0], [125, 1], [124, -2], [121, -5], [119, -3]], LAND_FILL, LAND_STROKE); // Sulawesi
-    drawPolygon([[131, -2], [140, -3], [150, -7], [151, -10], [141, -9], [134, -8], [131, -5]], LAND_FILL, LAND_STROKE); // New Guinea
-    drawPolygon([[120, -8], [125, -8], [128, -9], [122, -9]], LAND_FILL, LAND_STROKE); // Lesser Sundas
-    drawPolygon([[107, -6], [114, -8], [110, -8]], LAND_FILL, LAND_STROKE); // Java
-    drawPolygon([[120, 7], [122, 9], [125, 14], [124, 18], [121, 18], [120, 15], [119, 12], [120, 9]], LAND_FILL, LAND_STROKE); // Philippines (rough)
-
-    // Australia
     drawPolygon([
-      [113, -22], [114, -26], [115, -32], [118, -34], [123, -34], [129, -32],
-      [132, -32], [137, -34], [140, -38], [144, -39], [146, -39], [150, -37],
-      [152, -32], [153, -28], [153, -25], [146, -19], [142, -14], [139, -17],
-      [135, -15], [130, -12], [126, -14], [122, -17], [117, -20]
+      [79.6,  8.9], [81.7,  8.8], [82.0,  6.7], [80.4,  5.9]
+    ], LAND_FILL, LAND_STROKE);
+    // Japan — Hokkaido + Honshu + Shikoku + Kyushu, rough single outline
+    // Hokkaido
+    drawPolygon([
+      [140.0, 41.6], [141.5, 41.7], [144.5, 42.5], [145.5, 44.0],
+      [144.0, 45.5], [142.0, 45.5], [140.5, 44.5], [140.0, 42.5]
+    ], LAND_FILL, LAND_STROKE);
+    // Honshu
+    drawPolygon([
+      [141.5, 41.4], [141.6, 39.5], [140.5, 38.0], [141.5, 36.5],
+      [141.0, 35.5], [139.5, 34.6], [138.5, 34.5], [137.0, 34.8],
+      [136.5, 34.5], [135.5, 33.5], [133.5, 33.7], [132.5, 33.5],
+      [131.0, 34.5], [130.8, 34.5], [131.2, 35.5], [132.5, 35.5],
+      [134.0, 35.7], [135.8, 35.7], [136.5, 37.5], [138.5, 37.5],
+      [139.5, 38.5], [140.5, 39.8], [141.0, 41.4]
+    ], LAND_FILL, LAND_STROKE);
+    // Shikoku
+    drawPolygon([
+      [132.5, 33.5], [134.7, 34.4], [134.5, 33.5], [132.8, 32.8]
+    ], LAND_FILL, LAND_STROKE);
+    // Kyushu
+    drawPolygon([
+      [129.5, 32.5], [131.5, 32.0], [131.8, 31.0], [130.7, 31.0],
+      [130.0, 31.5], [129.8, 33.0]
+    ], LAND_FILL, LAND_STROKE);
+    // Taiwan
+    drawPolygon([
+      [120.0, 22.0], [121.0, 22.5], [121.8, 24.5], [121.5, 25.2],
+      [120.6, 24.5], [120.2, 23.0]
+    ], LAND_FILL, LAND_STROKE);
+    // Hainan
+    drawPolygon([
+      [108.5, 18.5], [110.5, 18.5], [111.0, 20.0], [109.0, 20.0]
+    ], LAND_FILL, LAND_STROKE);
+    // Sakhalin
+    drawPolygon([
+      [141.5, 46.0], [143.5, 47.0], [144.5, 51.0], [142.0, 53.5],
+      [141.5, 53.0], [142.0, 50.0], [141.0, 47.0]
+    ], LAND_FILL, LAND_STROKE);
+
+    // ---- SE Asian archipelago ----
+    // Sumatra
+    drawPolygon([
+      [95.3,  5.5], [98.5,  3.5], [101.5,  1.0], [103.5, -1.0],
+      [105.5, -3.0], [106.0, -6.0], [102.0, -4.5], [ 99.5, -1.5],
+      [ 96.0,  2.5]
+    ], LAND_FILL, LAND_STROKE);
+    // Java
+    drawPolygon([
+      [105.5, -6.0], [109.5, -6.5], [114.0, -7.5], [114.5, -8.5],
+      [110.0, -8.5], [106.0, -7.0]
+    ], LAND_FILL, LAND_STROKE);
+    // Borneo
+    drawPolygon([
+      [109.0,  2.0], [113.0,  4.5], [117.5,  4.5], [119.0,  2.5],
+      [118.5,  0.5], [117.5, -1.5], [114.5, -3.5], [112.5, -3.0],
+      [110.0, -1.0], [108.5,  1.0]
+    ], LAND_FILL, LAND_STROKE);
+    // Sulawesi
+    drawPolygon([
+      [119.0,  1.0], [121.0,  1.5], [122.5,  0.5], [124.5,  1.5],
+      [125.0, -1.0], [122.5, -3.0], [121.5, -5.5], [120.0, -3.5],
+      [119.0, -2.0]
+    ], LAND_FILL, LAND_STROKE);
+    // Lesser Sundas (Bali → Timor strip)
+    drawPolygon([
+      [115.0, -8.5], [125.0, -8.5], [127.5, -9.5], [122.0, -10.0],
+      [117.0, -9.0]
+    ], LAND_FILL, LAND_STROKE);
+    // Halmahera
+    drawPolygon([
+      [127.5,  1.5], [129.0,  1.0], [128.7, -1.0], [127.8, -0.5]
+    ], LAND_FILL, LAND_STROKE);
+    // New Guinea
+    drawPolygon([
+      [131.0, -1.0], [134.0, -1.5], [138.0, -2.0], [141.0, -2.6],
+      [145.0, -4.0], [148.0, -5.5], [150.5, -6.5], [150.5, -9.0],
+      [147.0, -10.0], [143.0, -9.5], [140.0, -8.0], [136.5, -7.5],
+      [133.0, -6.5], [131.5, -4.5]
+    ], LAND_FILL, LAND_STROKE);
+    // Philippines (Luzon + Mindanao approximated)
+    drawPolygon([
+      [120.0, 13.0], [121.5, 13.5], [122.0, 17.0], [121.5, 18.5],
+      [120.0, 18.5], [119.7, 16.0], [120.0, 14.0]
+    ], LAND_FILL, LAND_STROKE);
+    drawPolygon([
+      [122.0,  7.0], [126.5,  7.0], [126.0,  9.5], [123.5, 10.0],
+      [121.5,  8.0]
+    ], LAND_FILL, LAND_STROKE);
+
+    // ---- Australia + Tasmania + NZ ----
+    drawPolygon([
+      [142.5, -10.5], [143.5, -12.0], [144.5, -14.0], [145.5, -14.5],
+      [146.5, -19.0], [149.0, -21.5], [153.5, -25.5], [153.5, -28.5],
+      [152.0, -32.0], [150.5, -35.0], [148.5, -37.5], [146.5, -38.5],
+      [143.5, -38.5], [141.5, -38.0], [140.0, -37.5], [139.5, -35.5],
+      [137.5, -35.5], [136.5, -35.0], [137.5, -32.5], [135.5, -34.5],
+      [131.0, -32.0], [128.0, -32.5], [124.0, -33.5], [117.0, -35.0],
+      [115.0, -33.5], [114.0, -27.0], [113.5, -22.0], [121.0, -19.5],
+      [122.5, -17.0], [125.5, -14.0], [129.5, -14.5], [130.5, -12.5],
+      [132.5, -11.0], [135.0, -12.0], [137.5, -16.5], [139.5, -17.5],
+      [141.5, -13.5], [142.5, -10.5]
     ], LAND_FILL, LAND_STROKE);
     // Tasmania
-    drawPolygon([[145, -41], [148, -41], [148, -43], [145, -43]], LAND_FILL, LAND_STROKE);
-    // New Zealand
-    drawPolygon([[172, -41], [174, -41], [176, -39], [177, -38], [174, -36], [172, -37]], LAND_FILL, LAND_STROKE); // North Island
-    drawPolygon([[166, -47], [171, -47], [174, -42], [172, -41], [168, -43]], LAND_FILL, LAND_STROKE); // South Island
-
-    // Antarctica strip (decorative)
     drawPolygon([
-      [-180, -65], [-90, -68], [0, -66], [90, -68], [180, -65],
+      [144.5, -40.5], [148.5, -40.6], [148.5, -43.5], [145.0, -43.5]
+    ], LAND_FILL, LAND_STROKE);
+    // New Zealand — North
+    drawPolygon([
+      [172.5, -41.0], [173.5, -40.5], [174.5, -36.5], [173.0, -34.5],
+      [174.5, -36.5], [176.5, -38.5], [177.5, -37.5], [175.5, -41.5]
+    ], LAND_FILL, LAND_STROKE);
+    // New Zealand — South
+    drawPolygon([
+      [166.5, -45.5], [170.5, -41.0], [172.5, -43.5], [171.0, -46.5]
+    ], LAND_FILL, LAND_STROKE);
+
+    // ---- Antarctica strip ----
+    drawPolygon([
+      [-180, -65], [-150, -73], [-120, -75], [-90, -73], [-60, -75],
+      [-30, -70], [  0, -68], [ 30, -69], [ 60, -67], [ 90, -65],
+      [120, -65], [150, -71], [180, -73],
       [180, -90], [-180, -90]
     ], LAND_FILL, LAND_STROKE);
 
-    // Subtle inland water / interest accents — just a few rivers / lakes as
-    // a hint of detail (Caspian, Great Lakes are visible at this zoom).
-    drawPolygon([[48, 47], [54, 47], [54, 38], [49, 37], [48, 42]], '#cfdde5', '#7a8d9b'); // Caspian
-    drawPolygon([[-92, 47], [-83, 48], [-77, 45], [-83, 43], [-90, 44]], '#cfdde5', '#7a8d9b'); // Great Lakes blob
+    // ---- Inland water accents ----
+    // Caspian Sea
+    drawPolygon([
+      [47.0, 47.0], [50.0, 47.0], [53.0, 45.5], [54.0, 43.0],
+      [53.0, 40.5], [50.5, 38.5], [49.5, 37.5], [48.5, 39.5],
+      [47.5, 42.5], [47.0, 45.5]
+    ], '#cfdde5', '#7a8d9b');
+    // Black Sea (carve)
+    drawPolygon([
+      [27.5, 41.5], [37.5, 42.0], [41.0, 43.5], [40.0, 45.5],
+      [37.0, 47.0], [33.0, 46.0], [30.5, 46.0], [28.0, 43.5]
+    ], '#cfdde5', '#7a8d9b');
+    // Great Lakes blob (Superior → Erie/Ontario)
+    drawPolygon([
+      [-92.0, 47.5], [-87.0, 48.5], [-82.0, 48.5], [-77.0, 46.5],
+      [-79.0, 43.0], [-83.0, 41.5], [-87.5, 41.5], [-89.5, 43.0],
+      [-91.5, 45.5]
+    ], '#cfdde5', '#7a8d9b');
 
-    // Title bar across the top, modern minimalist
+    // ===== Title — single-line, modern minimalist =====
     mctx.fillStyle = '#1b2a32';
-    mctx.font = '600 36px "Inter", system-ui, sans-serif';
+    mctx.font = '600 38px "Inter", system-ui, sans-serif';
     mctx.textAlign = 'left';
-    mctx.fillText('biotech world', 40, 50);
-    mctx.font = '300 18px "Inter", system-ui, sans-serif';
-    mctx.fillStyle = '#42525a';
-    mctx.fillText('top 20 biopharma headquarters by market capitalisation', 40, 76);
+    mctx.fillText('Biotech world', 40, 54);
     mctx.font = '300 13px "Inter", system-ui, sans-serif';
     mctx.fillStyle = '#7a8a90';
     mctx.textAlign = 'right';
@@ -3983,14 +4276,76 @@ function buildCorkBoardWithMap(opts = {}) {
 
   // ---- red push pins ----
   // Stylised board (non-realistic): four decorative corner pins.
-  // Realistic board: one pin per top-20 biopharma HQ, raycastable for
-  // hover/click interactions in the front-view zoom.
+  // Realistic board: one pin per biopharma HQ, raycastable for hover/click
+  // interactions in the front-view zoom.
   const pinHeadMat = new THREE.MeshStandardMaterial({
-    color: 0xd03030, roughness: 0.4, metalness: 0.35, emissive: 0x401010, emissiveIntensity: 0.2,
+    color: 0xd02828, roughness: 0.28, metalness: 0.18,
+    emissive: 0x2a0808, emissiveIntensity: 0.18,
+  });
+  const pinShineMat = new THREE.MeshStandardMaterial({
+    color: 0xea4646, roughness: 0.18, metalness: 0.22,
+    emissive: 0x3a1010, emissiveIntensity: 0.18,
   });
   const pinShaftMat = new THREE.MeshStandardMaterial({
-    color: 0x4a4a4a, roughness: 0.3, metalness: 0.85,
+    color: 0x5a5d63, roughness: 0.25, metalness: 0.92,
   });
+
+  // Build one realistic push-pin (thumbtack):
+  //   * a tapered metal shaft pressed into the cork
+  //   * a slightly-tapered red plastic disc on top of the shaft
+  //   * a flattened upper-hemisphere "dome" sitting on the disc
+  // The mesh is returned as a group anchored at the cork surface
+  // (local +Z = away from cork).
+  function buildPushPin() {
+    const pin = new THREE.Group();
+
+    // shaft — sharp metal pin (tapered toward the embedded tip)
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.0028, 0.0010, 0.022, 10),
+      pinShaftMat
+    );
+    shaft.rotation.x = Math.PI / 2;
+    shaft.position.z = 0.011;     // half-height above cork
+    shaft.castShadow = true;
+    pin.add(shaft);
+
+    // disc — slightly tapered plastic body
+    const disc = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.0195, 0.0220, 0.0060, 28),
+      pinHeadMat
+    );
+    disc.rotation.x = Math.PI / 2;
+    disc.position.z = 0.022 + 0.0030;
+    disc.castShadow = true;
+    pin.add(disc);
+
+    // dome — flattened upper hemisphere (the "shiny" top)
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.0195, 22, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      pinShineMat
+    );
+    dome.rotation.x = -Math.PI / 2;
+    dome.scale.set(1, 0.42, 1);
+    dome.position.z = 0.022 + 0.0060;
+    dome.castShadow = true;
+    pin.add(dome);
+
+    // small specular highlight cap — even shinier ellipsoid at the top
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(0.0070, 16, 10),
+      new THREE.MeshStandardMaterial({
+        color: 0xffe5e0, roughness: 0.10, metalness: 0.0,
+        emissive: 0xff8060, emissiveIntensity: 0.45, transparent: true, opacity: 0.55,
+      })
+    );
+    cap.scale.set(1, 0.5, 1);
+    cap.position.set(-0.005, 0.004, 0.022 + 0.0085);
+    pin.add(cap);
+
+    // Expose the dome as the canonical raycast target.
+    pin.userData.raycastTarget = dome;
+    return { group: pin, shaft, disc, dome };
+  }
 
   if (!realistic) {
     const pinInset = 0.06;
@@ -4001,18 +4356,9 @@ function buildCorkBoardWithMap(opts = {}) {
       [ MW / 2 - pinInset, -MH / 2 + pinInset],
     ];
     for (const [px, py] of pinCorners) {
-      const shaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.009, 0.009, 0.030, 8), pinShaftMat
-      );
-      shaft.rotation.x = Math.PI / 2;
-      shaft.position.set(px, PANEL_Y + py, BD / 2 + 0.015);
-      g.add(shaft);
-      const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.028, 14, 12), pinHeadMat
-      );
-      head.position.set(px, PANEL_Y + py, BD / 2 + 0.040);
-      head.castShadow = true;
-      g.add(head);
+      const { group: pin } = buildPushPin();
+      pin.position.set(px, PANEL_Y + py, BD / 2);
+      g.add(pin);
     }
   } else {
     // Top-20 biopharma by market capitalisation (2024-2026 ballpark).
@@ -4059,11 +4405,70 @@ function buildCorkBoardWithMap(opts = {}) {
         desc: "Australian biopharma that began as the Commonwealth Serum Laboratories in 1916. Today the world's largest plasma-products company (immunoglobulins, albumin, clotting factors) and home to the flu-vaccine business CSL Seqirus." },
       { name: 'GSK', city: 'London, UK', lat: 51.51, lon: -0.13,
         desc: "British company headquartered in west London. A vaccines leader (Shingrix for shingles, Arexvy for RSV) and active in HIV through its ViiV Healthcare joint venture; restructured around specialty medicines after spinning out consumer health as Haleon." },
+      // --- additional 30 biotech / biopharma companies ---
+      { name: 'Takeda', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69,
+        desc: "Japan's largest pharmaceutical company, founded in Osaka in 1781. Transformed into a global player after the $62B acquisition of Shire in 2019; strong in rare diseases, oncology, gastroenterology and plasma-derived therapies." },
+      { name: 'Daiichi Sankyo', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: 0.05, dy: 0,
+        desc: "Tokyo-based pharma whose ADC platform with AstraZeneca produced Enhertu — currently one of the most important breast-cancer therapies — alongside the antiplatelet Effient and the antihypertensive Olmesartan." },
+      { name: 'Astellas', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: -0.05, dy: 0,
+        desc: "Japanese firm formed from the 2005 Yamanouchi–Fujisawa merger. Best known for the prostate-cancer franchise Xtandi (with Pfizer) and the gene-therapy candidate AT132; investing heavily in cell and gene programs." },
+      { name: 'Eisai', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: 0, dy: 0.04,
+        desc: "Tokyo company that co-developed the Alzheimer's antibody Leqembi with Biogen and the antiepileptic Fycompa. Long-running focus on neurology and oncology rooted in its Tsukuba research centre." },
+      { name: 'Chugai', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: 0, dy: -0.04,
+        desc: "Roche's Japanese affiliate (61% owned), responsible for Actemra (tocilizumab) and Hemlibra, the bispecific antibody that transformed haemophilia A care. Operates as Roche's Asia-Pacific research engine." },
+      { name: 'Otsuka', city: 'Osaka, Japan', lat: 34.69, lon: 135.50,
+        desc: "Osaka-headquartered group spanning pharma, nutraceuticals (Pocari Sweat) and diagnostics. In medicines, best known for Abilify and Rexulti — atypical antipsychotics co-developed with Lundbeck — and the TB drug Deltyba." },
+      { name: 'Bayer', city: 'Leverkusen, Germany', lat: 51.03, lon: 6.99,
+        desc: "Originator of aspirin (1899). Today a global pharma + crop-science conglomerate; its pharmaceutical division leads in cardiology (Xarelto, with J&J) and women's health, alongside a fast-growing cell-and-gene-therapy arm." },
+      { name: 'Boehringer Ingelheim', city: 'Ingelheim, Germany', lat: 49.97, lon: 8.06,
+        desc: "Family-owned, founded 1885. The world's largest private pharmaceutical company. Flagship medicines include Jardiance for type-2 diabetes / heart failure (with Lilly) and Spiriva for COPD, plus a leading animal-health arm." },
+      { name: 'Merck KGaA', city: 'Darmstadt, Germany', lat: 49.87, lon: 8.65,
+        desc: "Founded 1668 — the world's oldest pharmaceutical and chemical company. Distinct from US Merck. Active across healthcare (Mavenclad, Bavencio), life-science tools (Sigma-Aldrich) and electronics materials." },
+      { name: 'Hengrui Medicine', city: 'Lianyungang, China', lat: 34.59, lon: 119.22,
+        desc: "China's largest domestic innovator pharma, founded 1970 in Jiangsu. Built a sweeping oncology pipeline around PD-1 inhibitor camrelizumab and is increasingly out-licensing assets to global partners." },
+      { name: 'WuXi AppTec', city: 'Shanghai, China', lat: 31.23, lon: 121.47,
+        desc: "Shanghai-headquartered contract-research and development organisation. Provides discovery, preclinical and clinical services to a majority of the world's top-20 pharma; a key node of the global biotech supply chain." },
+      { name: 'WuXi Biologics', city: 'Wuxi, China', lat: 31.49, lon: 120.31,
+        desc: "Sister company to WuXi AppTec, focused on biologic-drug development and manufacturing (mAbs, ADCs, bispecifics). Operates the largest network of CDMO biologics facilities in China and Ireland." },
+      { name: 'Innovent Biologics', city: 'Suzhou, China', lat: 31.30, lon: 120.59,
+        desc: "Suzhou-based biotech founded 2011. Co-developed the PD-1 antibody Tyvyt (sintilimab) with Eli Lilly and has built one of China's deepest oncology and metabolic-disease pipelines." },
+      { name: 'BeiGene', city: 'Beijing, China', lat: 39.90, lon: 116.40,
+        desc: "Founded 2010 in Beijing; later rebranded as BeOne Medicines with a Cambridge MA registration. Best known for Brukinsa (zanubrutinib), the BTK inhibitor that overtook ibrutinib in CLL after head-to-head data." },
+      { name: 'Genmab', city: 'Copenhagen, Denmark', lat: 55.68, lon: 12.57, dx: -0.05, dy: 0,
+        desc: "Copenhagen biotech behind the antibody-engineering technology DuoBody (bispecifics) and the CD38 antibody Darzalex, partnered with J&J. Recently launched Tepkinly (epcoritamab) for lymphoma with AbbVie." },
+      { name: 'Lundbeck', city: 'Valby, Denmark', lat: 55.66, lon: 12.50,
+        desc: "Danish neuroscience specialist founded 1915. Built around CNS medicines — Cipralex/Lexapro, Brintellix/Trintellix for depression, and Rexulti (with Otsuka) for schizophrenia and Alzheimer's-related agitation." },
+      { name: 'Bavarian Nordic', city: 'Hellerup, Denmark', lat: 55.73, lon: 12.57, dx: 0.05, dy: 0.03,
+        desc: "Vaccine company headquartered north of Copenhagen. Maker of the smallpox/mpox vaccine Jynneos (Imvanex) and the only FDA-approved Ebola Sudan vaccine candidate; long-time partner of US BARDA." },
+      { name: 'Argenx', city: 'Ghent, Belgium', lat: 51.05, lon: 3.72,
+        desc: "Ghent-based biotech that pioneered FcRn-blocking antibodies. Its lead drug Vyvgart (efgartigimod) transformed treatment for generalised myasthenia gravis and is rapidly expanding into other autoimmune indications." },
+      { name: 'UCB', city: 'Brussels, Belgium', lat: 50.85, lon: 4.35,
+        desc: "Brussels biopharma with strengths in immunology and neurology. Major products include the epilepsy drug Vimpat and the psoriasis antibody Bimzelx (bimekizumab), one of the few IL-17A/F dual inhibitors on the market." },
+      { name: 'Galapagos', city: 'Mechelen, Belgium', lat: 51.03, lon: 4.48,
+        desc: "Belgian biotech that out-licensed the JAK1 inhibitor Jyseleca (filgotinib) to Gilead, then pivoted into cell therapy. Operates a decentralised CAR-T manufacturing network that builds patient-specific therapies in days." },
+      { name: 'Ipsen', city: 'Boulogne-Billancourt, France', lat: 48.83, lon: 2.24, dx: 0.04, dy: -0.05,
+        desc: "French specialty-care pharma based just outside Paris. Focused on oncology (Cabometyx via licence from Exelixis), rare diseases (Bylvay, Increlex) and neuroscience — the Dysport botulinum-toxin franchise." },
+      { name: 'Servier', city: 'Suresnes, France', lat: 48.87, lon: 2.23, dx: -0.05, dy: -0.05,
+        desc: "French non-profit-foundation-owned pharma headquartered in Suresnes. Strong in cardiology (Procoralan) and oncology — acquired Agios's oncology arm in 2021, bringing IDH inhibitors Tibsovo and Idhifa." },
+      { name: 'Lonza', city: 'Basel, Switzerland', lat: 47.56, lon: 7.59, dx: -0.04, dy: -0.04,
+        desc: "Swiss contract development and manufacturing leader (CDMO). Manufactures everything from antibodies and cell therapies to mRNA — a key partner for Moderna during the COVID-19 vaccine ramp." },
+      { name: 'Galderma', city: 'Zug, Switzerland', lat: 47.17, lon: 8.52,
+        desc: "Zug-based dermatology specialist spun out of Nestlé. Markets the injectable filler Restylane, the IL-31 antibody Nemluvio (nemolizumab) for atopic dermatitis, and one of the largest skincare portfolios in the world." },
+      { name: 'Teva Pharmaceuticals', city: 'Tel Aviv, Israel', lat: 32.08, lon: 34.78,
+        desc: "Israel's largest pharma and the world's biggest generics maker. Branded portfolio anchored by Austedo (Huntington's chorea, tardive dyskinesia) and the long-acting CGRP antibody Ajovy for migraine." },
+      { name: 'Sun Pharma', city: 'Mumbai, India', lat: 19.07, lon: 72.88,
+        desc: "India's largest pharmaceutical company. Generics-led globally, but its specialty arm produces Ilumya for psoriasis and the dermatology brand Cequa; the world's largest manufacturer of cardiac and oncology generics." },
+      { name: "Dr. Reddy's", city: 'Hyderabad, India', lat: 17.39, lon: 78.49,
+        desc: "Hyderabad-based generics and biosimilars maker founded 1984. Among India's largest exporters of pharmaceuticals to the US and EU, and a leading manufacturer of complex generics and ophthalmology products." },
+      { name: 'Cipla', city: 'Mumbai, India', lat: 19.07, lon: 72.88, dx: -0.06, dy: 0,
+        desc: "Mumbai pharma founded 1935, best known internationally for slashing HIV-medicine prices in Africa in the 2000s, enabling generic ART access. Today a major respiratory and oncology generics supplier worldwide." },
+      { name: 'Biocon', city: 'Bangalore, India', lat: 12.97, lon: 77.59,
+        desc: "Bangalore-based biotech founded by Kiran Mazumdar-Shaw in 1978. India's largest biologics maker — diabetes insulins and a leading biosimilars portfolio of trastuzumab, bevacizumab, adalimumab and pegfilgrastim." },
+      { name: 'BioMarin', city: 'San Rafael, USA', lat: 37.97, lon: -122.53,
+        desc: "Bay-Area company specialising in rare genetic disease. Drugs for PKU (Kuvan, Palynziq), MPS (Naglazyme, Vimizim, Aldurazyme) and the recently launched haemophilia A gene therapy Roctavian." },
+      { name: 'Jazz Pharmaceuticals', city: 'Dublin, Ireland', lat: 53.35, lon: -6.27,
+        desc: "Headquartered in Dublin; major franchises in sleep medicine (Xywav, Xyrem for narcolepsy) and oncology — most notably the cannabidiol-based epilepsy drug Epidiolex, acquired through the GW Pharmaceuticals takeover." },
     ];
-
-    const HEAD_R   = 0.022;
-    const SHAFT_L  = 0.026;
-    const SHAFT_R  = 0.006;
 
     const companyPins = [];
     for (let i = 0; i < COMPANIES.length; i++) {
@@ -4072,24 +4477,17 @@ function buildCorkBoardWithMap(opts = {}) {
       const lx = (c.lon / 360) * MW + (c.dx || 0);
       const ly = (c.lat / 180) * MH + (c.dy || 0);
 
-      const shaft = new THREE.Mesh(
-        new THREE.CylinderGeometry(SHAFT_R, SHAFT_R, SHAFT_L, 8), pinShaftMat
-      );
-      shaft.rotation.x = Math.PI / 2;
-      shaft.position.set(lx, PANEL_Y + ly, BD / 2 + SHAFT_L / 2);
-      g.add(shaft);
+      const { group: pin, shaft, disc, dome } = buildPushPin();
+      pin.position.set(lx, PANEL_Y + ly, BD / 2);
+      // tag the dome (raycast target) with the company index
+      dome.userData.companyIdx   = i;
+      dome.userData.isCompanyPin = true;
+      // also tag the disc so a near-rim click registers
+      disc.userData.companyIdx   = i;
+      disc.userData.isCompanyPin = true;
+      g.add(pin);
 
-      const head = new THREE.Mesh(
-        new THREE.SphereGeometry(HEAD_R, 14, 12), pinHeadMat
-      );
-      head.position.set(lx, PANEL_Y + ly, BD / 2 + SHAFT_L);
-      head.castShadow = true;
-      // tag the head for raycast lookup
-      head.userData.companyIdx = i;
-      head.userData.isCompanyPin = true;
-      g.add(head);
-
-      companyPins.push({ company: c, head, shaft });
+      companyPins.push({ company: c, group: pin, head: dome, disc, shaft });
     }
     g.userData.companies = COMPANIES;
     g.userData.companyPins = companyPins;
@@ -5115,6 +5513,9 @@ html { scroll-behavior: smooth; }
     bpEl.classList.remove('as-tooltip');
     _bpActiveIdx = -1;
     _bpHoverIdx  = -1;
+    // releasing the click also un-zooms the camera back to the full board view
+    projectsWorld.zoomedPinWorld = null;
+    projectsWorld.zoomedPinHead  = null;
     document.body.style.cursor = '';
   }
   // expose so the board-exit paths can dismiss the card
@@ -5127,33 +5528,54 @@ html { scroll-behavior: smooth; }
     _pinNDC.x = (clientX / window.innerWidth)  * 2 - 1;
     _pinNDC.y = -(clientY / window.innerHeight) * 2 + 1;
     _pinRaycaster.setFromCamera(_pinNDC, projectsWorld.camera);
-    const heads = board.pins.map(p => p.head);
-    const hits  = _pinRaycaster.intersectObjects(heads, false);
+    // raycast the dome (visible top) AND the disc (slightly wider) so a
+    // click near the rim of the thumbtack still registers
+    const targets = [];
+    for (const p of board.pins) {
+      if (p.head) targets.push(p.head);
+      if (p.disc) targets.push(p.disc);
+    }
+    const hits  = _pinRaycaster.intersectObjects(targets, false);
     if (!hits.length) return null;
-    const head = hits[0].object;
-    const idx  = head.userData.companyIdx;
-    return { idx, head, company: board.companies[idx] };
+    const hitObj = hits[0].object;
+    const idx    = hitObj.userData.companyIdx;
+    // canonical "head" for positioning is the pin's dome
+    const pinRec = board.pins[idx];
+    return { idx, head: pinRec.head, company: board.companies[idx] };
   }
 
   function _bpPositionCard(headMesh) {
-    // Anchor the card near the pin's screen-space position, then nudge
-    // (via left/top) to keep it inside the viewport.
+    // Anchor the card near where the pin WILL appear after the camera has
+    // zoomed into the country — i.e., project headWorld through a virtual
+    // camera placed at the zoomed-in position.  This way, by the time the
+    // camera lerp finishes, the pin has slid right up to the card edge.
     const headWorld = new THREE.Vector3();
     headMesh.getWorldPosition(headWorld);
-    const ndc = headWorld.clone().project(projectsWorld.camera);
+    const board = projectsWorld.activeBoard;
+    const camDist = 0.55;
+    const tempCam = projectsWorld.camera.clone();
+    tempCam.position.set(
+      headWorld.x + board.faceDir.x * camDist,
+      headWorld.y + 0.05,
+      headWorld.z + board.faceDir.z * camDist
+    );
+    tempCam.lookAt(headWorld);
+    tempCam.updateMatrixWorld();
+    tempCam.updateProjectionMatrix();
+    const ndc = headWorld.clone().project(tempCam);
     const sx  = (ndc.x * 0.5 + 0.5) * window.innerWidth;
     const sy  = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
-    // approximate card dimensions (hard-coded to match the .as-card CSS) —
-    // avoids the size-mid-transition trap of getBoundingClientRect()
+    // approximate card dimensions (matches the .as-card CSS) — avoids the
+    // size-mid-transition trap of getBoundingClientRect()
     const cw  = 340;
     const ch  = 240;
-    const gap = 18;
+    const gap = 28;
     // prefer to the right of the pin, fall back to left if it would clip
     let left = sx + gap;
     if (left + cw > window.innerWidth - 12) left = sx - gap - cw;
     if (left < 12) left = 12;
     // anchor so the title sits a bit above the pin (gives the "moves up" feel)
-    let top = sy - ch * 0.65;
+    let top = sy - ch * 0.55;
     if (top < 12) top = 12;
     if (top + ch > window.innerHeight - 12) top = window.innerHeight - 12 - ch;
     bpEl.style.left = `${left}px`;
@@ -5201,6 +5623,12 @@ html { scroll-behavior: smooth; }
       bpEl.classList.remove('as-tooltip');
       bpEl.classList.add('as-card');
       _bpActiveIdx = hit.idx;
+      // Capture the pin's world position so the board-view camera lerps
+      // toward it (zooming into the country) on the next animation tick.
+      const headWorld = new THREE.Vector3();
+      hit.head.getWorldPosition(headWorld);
+      projectsWorld.zoomedPinWorld = headWorld;
+      projectsWorld.zoomedPinHead  = hit.head;
       // run after the next layout pass so the card has its full size
       requestAnimationFrame(() => _bpPositionCard(hit.head));
     } else if (_bpActiveIdx !== -1) {
@@ -6742,15 +7170,21 @@ html { scroll-behavior: smooth; }
       resetWalk(b);
       resetHead(b);
 
-      // Camera: float back along the face direction, lined up with the panel
-      const camDist = 2.0;
+      // Camera: float back along the face direction, lined up with the panel.
+      // When a pin is clicked (zoomedPinWorld set), tighten in on the country.
+      const zoomed = !!projectsWorld.zoomedPinWorld;
+      const focus  = zoomed ? projectsWorld.zoomedPinWorld : board.mapCentre;
+      const camDist = zoomed ? 0.55 : 2.0;
       const camTargetPos = new THREE.Vector3(
-        board.mapCentre.x + board.faceDir.x * camDist,
-        board.mapCentre.y + 0.05,
-        board.mapCentre.z + board.faceDir.z * camDist
+        focus.x + board.faceDir.x * camDist,
+        focus.y + 0.05,
+        focus.z + board.faceDir.z * camDist
       );
-      const camTargetLook = board.mapCentre.clone();
-      const kk = 1 - Math.pow(0.001, dt);
+      const camTargetLook = focus.clone();
+      // Faster lerp when zooming (so the country swooshes in) than when
+      // returning to the full-board view.
+      const lerpHalfLifeMs = zoomed ? 0.0006 : 0.001;
+      const kk = 1 - Math.pow(lerpHalfLifeMs, dt);
       projectsWorld.camPos.lerp(camTargetPos, kk);
       projectsWorld.camLook.lerp(camTargetLook, kk);
       projectsWorld.camera.position.copy(projectsWorld.camPos);
