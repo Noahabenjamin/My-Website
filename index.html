@@ -6,7 +6,7 @@
 <title>Noah Benjamin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Anton&display=swap" rel="stylesheet" />
 <style>
   html, body {
     margin: 0; padding: 0; overflow: hidden;
@@ -596,23 +596,130 @@
     transition: opacity 0.3s ease-out, background 0.2s;
   }
   #psych-skip:hover { background: rgba(255,255,255,0.20); }
-  /* Blue-movie overlay — the topmost layer of the screen during the psych
-     (underwater) stage.  mix-blend-mode: screen lets the dark middle of
-     the video read as "see-through" so Baymax + bubbles + gradient show
-     through underneath, while the bright edges of the video paint on top
-     as the priority layer. */
-  #psych-video-overlay {
-    position: fixed; inset: 0;
-    width: 100%; height: 100%;
-    object-fit: cover;
-    z-index: 36;
-    pointer-events: none;
-    opacity: 1;
-    mix-blend-mode: screen;
-    background: transparent;
-    display: none;
+  /* =====  Psych (underwater) — scroll-driven introduction sections  ===== */
+  /* While the psych stage is active, body becomes scrollable; the WebGL
+     canvas stays fixed behind the scrolling text. */
+  body.psych-scrolling { overflow-y: auto; overflow-x: hidden; }
+  body.psych-scrolling canvas,
+  body.psych-scrolling > div[style*="position: absolute"] {
+    position: fixed !important;
   }
-  #psych-video-overlay.visible { display: block; }
+  #psych-scroll {
+    position: relative;
+    z-index: 25;
+    width: 100%;
+    color: #f5efe2;
+    display: none;
+    pointer-events: none;
+  }
+  body.psych-scrolling #psych-scroll { display: block; }
+  .psych-section {
+    min-height: 100vh;
+    box-sizing: border-box;
+    padding: 8vh 6vw;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .psych-section.right-aligned { align-items: flex-end; text-align: right; }
+  .psych-section.left-aligned  { align-items: flex-start; text-align: left; }
+  .psych-section.center-aligned{ align-items: center;     text-align: center; justify-content: center; }
+  .psych-section.top  { justify-content: flex-start; }
+  .psych-section.mid  { justify-content: center; }
+  .psych-section.bot  { justify-content: flex-end; }
+  .psych-section .psych-card {
+    max-width: 460px;
+    text-shadow: 0 2px 18px rgba(0, 30, 50, 0.55);
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  }
+  .psych-section.in-view .psych-card {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .psych-title {
+    font-family: 'Anton', Impact, 'Arial Narrow Bold', sans-serif;
+    font-weight: 400;
+    font-size: clamp(64px, 9vw, 140px);
+    line-height: 0.94;
+    letter-spacing: 0.02em;
+    margin: 0 0 14px;
+    color: #ffffff;
+  }
+  .psych-eyebrow {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-size: clamp(20px, 2.2vw, 28px);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    margin: 0 0 6px;
+    color: #f5efe2;
+  }
+  .psych-sub {
+    font-family: 'Anton', Impact, 'Arial Narrow Bold', sans-serif;
+    font-size: clamp(30px, 4vw, 56px);
+    letter-spacing: 0.04em;
+    margin: 0 0 12px;
+    line-height: 1.0;
+    color: #ffffff;
+  }
+  .psych-body {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: clamp(17px, 1.4vw, 22px);
+    line-height: 1.55;
+    margin: 0;
+    color: rgba(245, 239, 226, 0.92);
+  }
+  .psych-list {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: clamp(17px, 1.4vw, 22px);
+    line-height: 1.7;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .psych-list li { margin: 0; }
+  .psych-list b {
+    font-family: 'Anton', Impact, sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    color: #ffffff;
+  }
+  /* "scroll down" hint — sits at the bottom of the first viewport. */
+  #psych-scroll-hint {
+    position: fixed;
+    bottom: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 27;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 13px;
+    letter-spacing: 0.30em;
+    text-transform: uppercase;
+    color: rgba(245, 239, 226, 0.78);
+    text-shadow: 0 2px 14px rgba(0, 30, 50, 0.55);
+    user-select: none;
+    pointer-events: none;
+    display: none;
+    animation: psych-hint-bob 1.8s ease-in-out infinite;
+  }
+  #psych-scroll-hint::after {
+    content: '↓';
+    display: block;
+    margin-top: 8px;
+    font-size: 16px;
+    letter-spacing: 0;
+    opacity: 0.7;
+  }
+  body.psych-scrolling #psych-scroll-hint { display: block; }
+  body.psych-scrolling.has-scrolled #psych-scroll-hint { opacity: 0; transition: opacity 0.4s; }
+  @keyframes psych-hint-bob {
+    0%, 100% { transform: translate(-50%, 0); }
+    50%      { transform: translate(-50%, 6px); }
+  }
 </style>
 </head>
 <body tabindex="-1">
@@ -629,13 +736,89 @@
 </div>
 <!-- Skip-to-cobble button shown only during the underwater (psych) scene. -->
 <button id="psych-skip" type="button">skip →</button>
-<!-- Blue movie overlay for the underwater scene: a real <video> element that
-     sits on top of the WebGL canvas with a "screen" blend mode so Baymax,
-     bubbles and the gradient still show through. -->
-<video id="psych-video-overlay" preload="auto" playsinline muted>
-  <source src="underwater.mov" type="video/quicktime" />
-  <source src="underwater.mov" type="video/mp4" />
-</video>
+<!-- Scroll hint that floats above the bottom edge during psych. -->
+<div id="psych-scroll-hint">scroll to read more</div>
+<!-- Scroll-driven introduction sections, shown only during the psych stage.
+     The WebGL canvas stays fixed behind these while they scroll past. -->
+<div id="psych-scroll" aria-hidden="true">
+  <!-- Hero (first viewport): empty, just the underwater scene + scroll hint -->
+  <section class="psych-section center-aligned mid"><div class="psych-card"></div></section>
+
+  <!-- WHO AM I — on the right, several sections that reveal as the user scrolls -->
+  <section class="psych-section right-aligned mid">
+    <div class="psych-card">
+      <p class="psych-eyebrow">19 — finnish-french-egyptian</p>
+      <h1 class="psych-title">WHO<br>AM I</h1>
+      <p class="psych-body" style="margin-top:14px;">French · Finnish · Egyptian. Raised across three places, currently building things in Helsinki.</p>
+    </div>
+  </section>
+
+  <section class="psych-section right-aligned mid">
+    <div class="psych-card">
+      <h2 class="psych-sub">LANGUAGES</h2>
+      <ul class="psych-list">
+        <li><b>Fluent</b> — French, Finnish, English</li>
+        <li><b>B1</b> — Spanish</li>
+        <li><b>A2</b> — Arabic</li>
+        <li><b>Learning</b> — Mandarin Chinese</li>
+      </ul>
+      <p class="psych-body" style="margin-top:10px;">Plan: get every one of these to fluency.</p>
+    </div>
+  </section>
+
+  <section class="psych-section right-aligned mid">
+    <div class="psych-card">
+      <h2 class="psych-sub">STUDIES</h2>
+      <p class="psych-body">Just finished Finnish lukio at <b>Etelä-Tapiolan lukio</b>. Applied to <b>Bioinformation Technology</b> (Diploma Insinööri) at <b>Aalto University</b>.</p>
+      <p class="psych-body" style="margin-top:10px;">Strong across math, biology, physics and chemistry. Currently teaching myself Python and working through differential equations on Khan Academy.</p>
+    </div>
+  </section>
+
+  <section class="psych-section right-aligned mid">
+    <div class="psych-card">
+      <h2 class="psych-sub">NEXT UP</h2>
+      <p class="psych-body">Finnish army in July — heading to <b>RUK</b> in Upinniemi. Plan to stay the full year and use the downtime to study languages and keep reading.</p>
+    </div>
+  </section>
+
+  <!-- WHAT I DO — switches sides, now on the LEFT -->
+  <section class="psych-section left-aligned mid">
+    <div class="psych-card">
+      <p class="psych-eyebrow">a business, a degree, and a long-term plan</p>
+      <h1 class="psych-title">WHAT<br>I DO</h1>
+      <p class="psych-body" style="margin-top:14px;">Right now: running a boat-care business, volunteering at Arctic15, applying to bioinformation tech at Aalto, and aiming for a sales-engineer career in biotech.</p>
+    </div>
+  </section>
+
+  <section class="psych-section left-aligned mid">
+    <div class="psych-card">
+      <h2 class="psych-sub">PAATTIKIILTOON.FI</h2>
+      <p class="psych-body">My boat waxing, cleaning and polishing business in Finland (Y-tunnus registered). Y-tunnus, invoicing, customer pipeline — all mine. About <b>10 000 €</b> saved, partly invested, the rest building toward an apartment as my first investment.</p>
+    </div>
+  </section>
+
+  <section class="psych-section left-aligned mid">
+    <div class="psych-card">
+      <h2 class="psych-sub">ARCTIC15</h2>
+      <p class="psych-body">Volunteer <b>Team Lead of Operations</b> at Arctic15 — one of the Nordics' biggest tech and VC conferences. The kind of room where social skills and execution both matter.</p>
+    </div>
+  </section>
+
+  <section class="psych-section left-aligned mid">
+    <div class="psych-card">
+      <h2 class="psych-sub">CAREER GOAL</h2>
+      <p class="psych-body">Sales engineer selling specialised <b>biotech equipment B2B</b>, with a cut of the deals I close. The path: biotech degree → instrumentation + commercial fluency → field work for an analytical-instruments vendor, then specialised platforms.</p>
+    </div>
+  </section>
+
+  <!-- Trailer that triggers the dive into cobble when scrolled past. -->
+  <section class="psych-section center-aligned mid">
+    <div class="psych-card">
+      <p class="psych-eyebrow">keep going ↓</p>
+      <h2 class="psych-sub" style="font-size:clamp(24px,3vw,40px);">DIVE INTO THE REST</h2>
+    </div>
+  </section>
+</div>
 <div id="vignette"></div>
 <div id="hint">use W A S D or arrow keys to move</div>
 <div id="beach-back" aria-label="back to cobble world"><span>b</span><span>a</span><span>c</span><span>k</span><span>.</span><span>.</span><span>.</span></div>
@@ -1910,23 +2093,6 @@ function buildPsychScene() {
   // bubbles rising in the background, baymax sinking and trying to swim up.
   const scene = new THREE.Scene();
 
-  // ---- underwater video element ----
-  // The Blue movie is rendered as a CSS-blended overlay on top of the
-  // WebGL canvas (see #psych-video-overlay), so Baymax + bubbles + the
-  // shader gradient all read CLEANLY underneath while the video is laid
-  // visually on top.  Playback control lives here.
-  const psychVideoEl = document.getElementById('psych-video-overlay');
-  if (psychVideoEl) {
-    psychVideoEl.muted = true;
-    psychVideoEl.playsInline = true;
-    psychVideoEl.preload = 'auto';
-    psychVideoEl.loop = false;
-    psychVideoEl.playbackRate = 0.85;
-    psychVideoEl.addEventListener('ended', () => {
-      try { psychVideoEl.pause(); } catch (_) {}
-    });
-  }
-
   // gradient background — light turquoise top (sun from above) → naturally
   // darker bottom.  No video baked into this material; the video sits as
   // a CSS overlay on top of the canvas instead.
@@ -1968,6 +2134,28 @@ function buildPsychScene() {
         caust = max(0.0, caust);
         col += vec3(0.18, 0.26, 0.28) * caust * smoothstep(0.40, 1.0, vUv.y) * 0.35;
 
+        // Light shafts (god rays) from the surface — vertical soft beams
+        // slowly drifting across the top half of the screen.
+        float shafts = 0.0;
+        for (int i = 0; i < 5; i++) {
+          float fi = float(i);
+          float pos = fract(fi * 0.2733 + uTime * (0.012 + fi * 0.004));
+          float dx = vUv.x - pos;
+          // slant the beam a touch so they're not perfectly vertical
+          dx -= (vUv.y - 0.7) * 0.06;
+          float beam = exp(-dx * dx * 220.0);
+          shafts += beam * (0.45 + 0.4 * sin(fi * 1.7));
+        }
+        // fade shafts from the surface down (brightest near the top)
+        shafts *= smoothstep(0.0, 0.55, vUv.y) * smoothstep(1.0, 0.55, vUv.y) * 1.8;
+        col += vec3(0.78, 0.94, 1.00) * shafts * 0.20;
+
+        // Subtle "dust"/marine-snow speckle drifting downward
+        float dust = sin(vUv.x * 380.0 + sin(vUv.y * 90.0 + uTime * 0.3) * 4.0)
+                   * sin(vUv.y * 260.0 - uTime * 0.18);
+        dust = max(0.0, dust - 0.92) * 8.0;
+        col += vec3(0.85, 0.92, 1.00) * dust * 0.10;
+
         // soft corner vignette only at the bottom
         float vig = 1.0 - smoothstep(0.65, 1.15, length((vUv - 0.5) * vec2(uAspect, 1.0)));
         float bottomMask = 1.0 - smoothstep(0.0, 0.55, vUv.y);
@@ -2003,8 +2191,8 @@ function buildPsychScene() {
   // a heavy splash burst around his body when he first hits the water.
   // Each bubble has its own material so it can fade independently as it rises.
   const bubbles = [];
-  const sharedGeom = new THREE.SphereGeometry(1, 10, 8);
-  for (let i = 0; i < 220; i++) {
+  const sharedGeom = new THREE.SphereGeometry(1, 12, 10);
+  for (let i = 0; i < 520; i++) {
     const mat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -2034,7 +2222,6 @@ function buildPsychScene() {
   return {
     scene, camera, baymax, bgMat, bubbles,
     bubbleEmitT: 0,
-    videoEl: psychVideoEl,
     splashFired: false,
   };
 }
@@ -7693,6 +7880,47 @@ html { scroll-behavior: smooth; }
     hint.style.opacity = '0';
   }
 
+  // ---- Psych (underwater) scroll-driven introduction ----
+  // Fades each section in as it reaches the viewport, hides the "scroll" hint
+  // once the user starts scrolling, and triggers the cobble-world transition
+  // when the user scrolls past the last section.
+  let _psychScrollIO = null;
+  function _psychScrollObserve() {
+    const sections = document.querySelectorAll('#psych-scroll .psych-section');
+    if (!sections.length) return;
+    if (_psychScrollIO) _psychScrollIO.disconnect();
+    _psychScrollIO = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          e.target.classList.add('in-view');
+        }
+      }
+    }, { threshold: 0.35 });
+    for (const s of sections) {
+      s.classList.remove('in-view');
+      _psychScrollIO.observe(s);
+    }
+  }
+  let _psychScrollFiredEnd = false;
+  window.addEventListener('scroll', () => {
+    if (stage !== 'psych') return;
+    if (window.scrollY > 50) document.body.classList.add('has-scrolled');
+    // When the user has scrolled to (or near) the bottom of the
+    // introduction, transition to the cobblestone world.
+    const doc = document.documentElement;
+    const scrolledBottom = (window.scrollY + window.innerHeight) >= (doc.scrollHeight - 8);
+    if (scrolledBottom && !_psychScrollFiredEnd) {
+      _psychScrollFiredEnd = true;
+      // brief fade to dark, then setStage('cobble')
+      try { fade.style.transition = 'opacity 0.6s ease-out'; fade.style.opacity = '1'; } catch (_) {}
+      setTimeout(() => {
+        setStage('cobble');
+        _psychScrollFiredEnd = false;
+        setTimeout(() => { try { fade.style.opacity = '0'; } catch (_) {} }, 60);
+      }, 600);
+    }
+  }, { passive: true });
+
   function setStage(name) {
     if (stage === name) return;
     stage = name;
@@ -7756,25 +7984,19 @@ html { scroll-behavior: smooth; }
     if (name === 'psych') {
       fade.style.opacity = '0';
       flashCut();
-      // show + restart the blue-movie overlay
-      if (psych && psych.videoEl) {
-        psych.videoEl.classList.add('visible');
-        try {
-          psych.videoEl.currentTime = 0;
-          psych.videoEl.playbackRate = 0.85;
-          const p = psych.videoEl.play();
-          if (p && typeof p.then === 'function') p.catch(() => {});
-        } catch (_) {}
-      }
       if (psych) { psych.splashFired = false; psych.splashEmitT = 0; }
       if (psych && psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = 0.0;
+      // Enable page scroll + show the introduction text overlay.
+      document.body.classList.add('psych-scrolling');
+      document.body.classList.remove('has-scrolled');
+      // Reset to top so the user starts at the hero viewport.
+      try { window.scrollTo({ top: 0, behavior: 'instant' in document.documentElement.style ? 'instant' : 'auto' }); } catch (_) { window.scrollTo(0, 0); }
+      _psychScrollObserve();
     } else {
-      // any other stage: hide + pause the overlay so it's not bleeding into
-      // other scenes
-      if (psych && psych.videoEl) {
-        psych.videoEl.classList.remove('visible');
-        try { psych.videoEl.pause(); } catch (_) {}
-      }
+      // Leaving psych — disable page scroll, hide the overlay.
+      document.body.classList.remove('psych-scrolling');
+      document.body.classList.remove('has-scrolled');
+      window.scrollTo(0, 0);
     }
     if (name === 'cobble') {
       vignette.style.opacity = '0';
@@ -8099,40 +8321,21 @@ html { scroll-behavior: smooth; }
       by = 0.0 - 0.04 * Math.sin(u * Math.PI);
       bodyTilt = 0.18 * (1 - u);
       armDown = 0.05;
-    } else if (t < STROKE1_END) {
-      // 3) Stroke #1 (slow, gentle lift) — small push so Baymax stays close
-      // to the middle of the screen
-      const u = (t - PSYCH_SETTLE) / STROKE_DUR;
-      const s = stroke(u);
-      armSweep = s.sweep;
-      armBack  = s.back;
-      armRotBonus = s.rotZ;
-      const lift = Math.sin(u * Math.PI) * 0.22;
-      by = 0.0 + lift + u * 0.15;
-      bodyTilt = -0.14 * Math.sin(u * Math.PI);
-    } else if (t < STROKE2_END) {
-      // 4) Stroke #2 (slow, gentle lift) — small push again, stays mid-screen
-      const u = (t - STROKE1_END) / STROKE_DUR;
-      const s = stroke(u);
-      armSweep = s.sweep;
-      armBack  = s.back;
-      armRotBonus = s.rotZ;
-      const lift = Math.sin(u * Math.PI) * 0.22;
-      by = 0.15 + lift + u * 0.15;
-      bodyTilt = -0.14 * Math.sin(u * Math.PI);
     } else {
-      // 5) Everything fades, Baymax accelerates straight down into darkness
-      const u = (t - DARK_START) / DARK_DUR;       // 0 → 1
-      // accelerating fall:  y = peak − a · u²
-      const peak = 0.30;
-      by = peak - 4.5 * u * u;
-      armDown = 0.16;
-      armRotBonus = -0.35;
-      bodyTilt = 0.18 + 0.05 * u;
-      headX = -0.28;
-      headZ =  0.22;
-      // fade the gradient + video + bubbles out to black
-      if (psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = Math.min(1, u * 1.15);
+      // 3) Loop the breast-stroke indefinitely — Baymax keeps trying to
+      // push up to the surface while the user scrolls.  Each stroke
+      // lifts him a touch, then he sinks back; the visual stays in the
+      // middle of the screen by re-centring around y ≈ 0.0.
+      const cycleT = (t - PSYCH_SETTLE) % STROKE_DUR;
+      const u = cycleT / STROKE_DUR;
+      const s = stroke(u);
+      armSweep = s.sweep;
+      armBack  = s.back;
+      armRotBonus = s.rotZ;
+      // smaller, repeating lift — never builds up, so he stays centred
+      const lift = Math.sin(u * Math.PI) * 0.20;
+      by = lift - 0.05 * Math.sin(t * 0.7);   // gentle drift back & forth
+      bodyTilt = -0.14 * Math.sin(u * Math.PI);
     }
 
     setArms(armSweep, armBack, armDown);
@@ -8167,9 +8370,36 @@ html { scroll-behavior: smooth; }
       }
     }
 
+    // ---- ambient bubbles ---- spawn from random positions across the bottom
+    // so the whole scene feels alive (not just the area around Baymax)
+    psych.ambientEmitT = (psych.ambientEmitT || 0) + dt;
+    const AMBIENT_INTERVAL = 0.05;
+    while (psych.ambientEmitT > AMBIENT_INTERVAL) {
+      psych.ambientEmitT -= AMBIENT_INTERVAL;
+      const ambient = psych.bubbles.find(bb => !bb.userData.alive);
+      if (ambient) {
+        ambient.position.set(
+          (Math.random() - 0.5) * 14,           // wide x spread
+          -3.5 - Math.random() * 0.6,            // start below the visible area
+          (Math.random() - 0.5) * 6              // some z depth for parallax
+        );
+        const r = 0.018 + Math.random() * 0.07;
+        ambient.scale.setScalar(r);
+        ambient.userData.alive = true;
+        ambient.userData.age = 0;
+        ambient.userData.life = 4.5 + Math.random() * 3.0;
+        ambient.userData.speed = 0.35 + Math.random() * 0.55;
+        ambient.userData.wobblePhase = Math.random() * Math.PI * 2;
+        ambient.userData.wobbleFreq  = 0.7 + Math.random() * 1.0;
+        ambient.userData.wobbleAmp   = 0.05 + Math.random() * 0.10;
+        ambient.material.opacity = 0.0;
+        ambient.visible = true;
+      }
+    }
+
     // ---- mouth bubbles ---- spawn periodically from baymax's mouth and rise
     psych.bubbleEmitT += dt;
-    const EMIT_INTERVAL = 0.18;     // s between emissions
+    const EMIT_INTERVAL = 0.10;     // s between emissions (faster than before)
     while (psych.bubbleEmitT > EMIT_INTERVAL) {
       psych.bubbleEmitT -= EMIT_INTERVAL;
       const dead = psych.bubbles.find(bb => !bb.userData.alive);
@@ -8218,7 +8448,7 @@ html { scroll-behavior: smooth; }
       bb.material.opacity = 0.7 * Math.min(fadeIn, fadeOut) * sceneFade;
     }
 
-    if (stageT >= PSYCH_DUR) setStage('cobble');
+    // (Stage transition is now scroll-driven — see the psych scroll handler.)
   }
 
   // ---- cobblestone update ----
