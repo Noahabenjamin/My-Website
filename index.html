@@ -599,7 +599,17 @@
   /* =====  Psych (underwater) — scroll-driven introduction sections  ===== */
   /* While the psych stage is active, body becomes scrollable; the WebGL
      canvas stays fixed behind the scrolling text. */
-  body.psych-scrolling { overflow-y: auto; overflow-x: hidden; }
+  /* During the psych stage we need BOTH the <html> root and the <body>
+     to scroll — html has overflow:hidden in the base reset, so without
+     this override the document can't scroll at all (wheel + touchpad +
+     arrow keys all no-op).  Auto height lets the document grow with
+     the introduction sections. */
+  html.psych-scrolling, body.psych-scrolling {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    height: auto !important;
+    min-height: 100%;
+  }
   body.psych-scrolling canvas,
   body.psych-scrolling > div[style*="position: absolute"] {
     position: fixed !important;
@@ -686,7 +696,8 @@
     letter-spacing: 0.05em;
     color: #ffffff;
   }
-  /* Subtle scroll hint — sits at the bottom of the first viewport. */
+  /* Subtle scroll hint — sits at the bottom of the first viewport.
+     Static (no bounce animation), 5% bigger than the previous size. */
   #psych-scroll-hint {
     position: fixed;
     bottom: 22px;
@@ -696,27 +707,23 @@
     font-family: 'Cormorant Garamond', Georgia, serif;
     font-style: italic;
     font-weight: 400;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.08em;
     color: rgba(245, 239, 226, 0.42);
     user-select: none;
     pointer-events: none;
     display: none;
-    animation: psych-hint-bob 2.4s ease-in-out infinite;
+    transition: opacity 0.4s ease-out;
   }
   #psych-scroll-hint::after {
     content: '↓';
     display: inline-block;
     margin-left: 6px;
-    font-size: 11px;
+    font-size: 12px;
     opacity: 0.7;
   }
   body.psych-scrolling #psych-scroll-hint { display: block; }
-  body.psych-scrolling.has-scrolled #psych-scroll-hint { opacity: 0; transition: opacity 0.4s; }
-  @keyframes psych-hint-bob {
-    0%, 100% { transform: translate(-50%, 0); }
-    50%      { transform: translate(-50%, 6px); }
-  }
+  body.psych-scrolling.has-scrolled #psych-scroll-hint { opacity: 0; }
 </style>
 </head>
 <body tabindex="-1">
@@ -7900,13 +7907,20 @@ html { scroll-behavior: smooth; }
   }
   // Arrow keys (and space / PageUp / PageDown / Home / End) drive the page
   // scroll during the psych stage.  Wheel + touchpad already scroll
-  // natively because body has overflow-y:auto while psych-scrolling is
-  // active — this handler just adds keyboard parity.
+  // natively because html + body get overflow-y:auto while psych-
+  // scrolling is active — this handler just adds keyboard parity.
   window.addEventListener('keydown', (e) => {
     if (stage !== 'psych') return;
-    // Don't capture keys while focus is inside an input / textarea / menu.
+    // Ignore real inputs (volume slider etc.) but DON'T ignore the hidden
+    // #focus-sink input, which silently has focus most of the time and was
+    // swallowing the arrow keys before.
     const t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    const isRealInput = t && (
+      (t.tagName === 'INPUT' && t.id !== 'focus-sink' && t.type !== 'hidden') ||
+      t.tagName === 'TEXTAREA' ||
+      t.isContentEditable
+    );
+    if (isRealInput) return;
     const k = (e.key || '').toLowerCase();
     const vh = window.innerHeight;
     let dy = null;
@@ -8013,13 +8027,20 @@ html { scroll-behavior: smooth; }
       if (psych) { psych.splashFired = false; psych.splashEmitT = 0; }
       if (psych && psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = 0.0;
       // Enable page scroll + show the introduction text overlay.
+      // Apply to BOTH <html> and <body> — the base reset has
+      // `html { overflow: hidden }` so just bodyalone isn't enough.
+      document.documentElement.classList.add('psych-scrolling');
       document.body.classList.add('psych-scrolling');
       document.body.classList.remove('has-scrolled');
       // Reset to top so the user starts at the hero viewport.
       try { window.scrollTo({ top: 0, behavior: 'instant' in document.documentElement.style ? 'instant' : 'auto' }); } catch (_) { window.scrollTo(0, 0); }
       _psychScrollObserve();
+      // Pull focus away from any input so arrow keys hit the window
+      // listener and scroll the page (focus-sink was eating them).
+      try { document.activeElement && document.activeElement.blur && document.activeElement.blur(); } catch (_) {}
     } else {
       // Leaving psych — disable page scroll, hide the overlay.
+      document.documentElement.classList.remove('psych-scrolling');
       document.body.classList.remove('psych-scrolling');
       document.body.classList.remove('has-scrolled');
       window.scrollTo(0, 0);
