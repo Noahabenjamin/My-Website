@@ -640,14 +640,27 @@
   #psych-scroll > .psych-section:first-of-type {
     min-height: 100vh;
   }
-  .psych-section.right-aligned { align-items: flex-end; text-align: right; }
-  .psych-section.left-aligned  { align-items: flex-start; text-align: left; }
-  .psych-section.center-aligned{ align-items: center;     text-align: center; justify-content: center; }
+  /* Side-aligned sections push their cards out toward the edges and leave
+     a centre lane wide enough for Baymax + breathing room (the cards are
+     also capped narrower so they stay compact horizontally). */
+  .psych-section.right-aligned {
+    align-items: flex-end;
+    text-align: right;
+    padding-left: max(34vw, 380px);
+  }
+  .psych-section.left-aligned {
+    align-items: flex-start;
+    text-align: left;
+    padding-right: max(34vw, 380px);
+  }
+  .psych-section.center-aligned{ align-items: center; text-align: center; justify-content: center; }
   .psych-section.top  { justify-content: flex-start; }
   .psych-section.mid  { justify-content: center; }
   .psych-section.bot  { justify-content: flex-end; }
   .psych-section .psych-card {
-    max-width: 460px;
+    /* compact horizontally so it stays tight against the screen edge and
+       can never reach the centre where Baymax is swimming */
+    max-width: min(360px, 32vw);
     opacity: 0;                     /* JS sets opacity per-frame on scroll */
     will-change: opacity;
   }
@@ -706,14 +719,14 @@
      Static (no bounce animation), 5% bigger than the previous size. */
   #psych-scroll-hint {
     position: fixed;
-    bottom: 22px;
+    bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 27;
     font-family: 'Cormorant Garamond', Georgia, serif;
     font-style: italic;
     font-weight: 400;
-    font-size: 12px;
+    font-size: 18px;
     letter-spacing: 0.08em;
     color: rgba(0, 0, 0, 0.55);
     user-select: none;
@@ -724,8 +737,8 @@
   #psych-scroll-hint::after {
     content: '↓';
     display: inline-block;
-    margin-left: 6px;
-    font-size: 12px;
+    margin-left: 8px;
+    font-size: 18px;
     opacity: 0.7;
   }
   body.psych-scrolling #psych-scroll-hint { display: block; }
@@ -759,7 +772,7 @@
     <div class="psych-card">
       <p class="psych-eyebrow">19 — finnish-french-egyptian</p>
       <h1 class="psych-title">WHO<br>AM I</h1>
-      <p class="psych-body" style="margin-top:14px;">French · Finnish · Egyptian. Raised across three places, currently building things in Helsinki.</p>
+      <p class="psych-body" style="margin-top:14px;">French, Finnish and Egyptian. I grew up between those three places and live in Helsinki right now.</p>
     </div>
   </section>
 
@@ -772,52 +785,52 @@
         <li><b>A2</b> — Arabic</li>
         <li><b>Learning</b> — Mandarin Chinese</li>
       </ul>
-      <p class="psych-body" style="margin-top:10px;">Plan: get every one of these to fluency.</p>
+      <p class="psych-body" style="margin-top:10px;">I'd like to get each of these closer to fluency over time.</p>
     </div>
   </section>
 
   <section class="psych-section right-aligned mid">
     <div class="psych-card">
       <h2 class="psych-sub">STUDIES</h2>
-      <p class="psych-body">Just finished Finnish lukio at <b>Etelä-Tapiolan lukio</b>. Applied to <b>Bioinformation Technology</b> (Diploma Insinööri) at <b>Aalto University</b>.</p>
-      <p class="psych-body" style="margin-top:10px;">Strong across math, biology, physics and chemistry. Currently teaching myself Python and working through differential equations on Khan Academy.</p>
+      <p class="psych-body">Just finished Finnish lukio at <b>Etelä-Tapiolan lukio</b>. I've applied to <b>Bioinformation Technology</b> (Diploma Insinööri) at <b>Aalto University</b> and I'm hoping to start there in the autumn.</p>
+      <p class="psych-body" style="margin-top:10px;">I enjoy maths, biology, physics and chemistry. On the side I'm slowly learning Python and working through differential equations on Khan Academy.</p>
     </div>
   </section>
 
   <section class="psych-section right-aligned mid">
     <div class="psych-card">
       <h2 class="psych-sub">NEXT UP</h2>
-      <p class="psych-body">Finnish army in July — heading to <b>RUK</b> in Upinniemi. Plan to stay the full year and use the downtime to study languages and keep reading.</p>
+      <p class="psych-body">Finnish army in July, heading to <b>RUK</b> in Upinniemi. I'm planning to stay the full year and use any quiet hours to keep reading and study languages.</p>
     </div>
   </section>
 
   <!-- WHAT I DO — switches sides, now on the LEFT -->
   <section class="psych-section left-aligned mid">
     <div class="psych-card">
-      <p class="psych-eyebrow">a business, a degree, and a long-term plan</p>
+      <p class="psych-eyebrow">a small business, a degree on the way, some volunteer work</p>
       <h1 class="psych-title">WHAT<br>I DO</h1>
-      <p class="psych-body" style="margin-top:14px;">Right now: running a boat-care business, volunteering at Arctic15, applying to bioinformation tech at Aalto, and aiming for a sales-engineer career in biotech.</p>
+      <p class="psych-body" style="margin-top:14px;">A boat-detailing business, volunteering with the Arctic15 team, and studying my way toward bioinformation technology at Aalto.</p>
     </div>
   </section>
 
   <section class="psych-section left-aligned mid">
     <div class="psych-card">
       <h2 class="psych-sub">PAATTIKIILTOON.FI</h2>
-      <p class="psych-body">My boat waxing, cleaning and polishing business in Finland (Y-tunnus registered). Y-tunnus, invoicing, customer pipeline — all mine. About <b>10 000 €</b> saved, partly invested, the rest building toward an apartment as my first investment.</p>
+      <p class="psych-body">Founder and CEO of <b>paattikiiltoon.fi</b>, a small boat-detailing business in Finland — waxing, cleaning and polishing (Y-tunnus registered). I run the whole thing: customer contact, scheduling, the work itself, and the side admin that comes with it.</p>
     </div>
   </section>
 
   <section class="psych-section left-aligned mid">
     <div class="psych-card">
       <h2 class="psych-sub">ARCTIC15</h2>
-      <p class="psych-body">Volunteer <b>Team Lead of Operations</b> at Arctic15 — one of the Nordics' biggest tech and VC conferences. The kind of room where social skills and execution both matter.</p>
+      <p class="psych-body"><b>Team Lead of Operations</b> at <b>Arctic15</b>, one of Northern Europe's largest VC and tech conferences. I lead a team of <b>24 volunteers</b> across the three event days — keeping the logistics, hospitality and on-site programme running calmly behind the scenes.</p>
     </div>
   </section>
 
   <section class="psych-section left-aligned mid">
     <div class="psych-card">
-      <h2 class="psych-sub">CAREER GOAL</h2>
-      <p class="psych-body">Sales engineer selling specialised <b>biotech equipment B2B</b>, with a cut of the deals I close. The path: biotech degree → instrumentation + commercial fluency → field work for an analytical-instruments vendor, then specialised platforms.</p>
+      <h2 class="psych-sub">WHERE I'M HEADING</h2>
+      <p class="psych-body">Long-term I'd love to work in technical sales for biotech — helping research teams find the right specialised lab instruments for what they're trying to do. Still learning my way toward it.</p>
     </div>
   </section>
 
@@ -846,8 +859,6 @@
   <div class="dm-hint">drag to rotate · E to step back</div>
 </div>
 <button id="laptop-close" type="button" aria-label="close">×</button>
-<!-- Visible only while computer-view is open: opens paattikiiltoon.fi in a new tab. -->
-<button id="laptop-open-site" type="button">click to open</button>
 <!-- Hamburger menu (top-right) — opens a dropdown with sound + controls -->
 <button id="menu-btn" type="button" aria-label="open menu">
   <span></span><span></span><span></span>
@@ -7108,7 +7119,6 @@ html { scroll-behavior: smooth; }
 }
 </style></head><body tabindex="-1">
 <iframe class="frame" src="${PAATTIKIILTOON_URL}" scrolling="no" referrerpolicy="no-referrer"></iframe>
-<div class="banner">click to open ↗</div>
 <script>
   // Click anywhere on the laptop shell → open the real site in a new tab.
   document.addEventListener('click', function(){
