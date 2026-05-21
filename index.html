@@ -7225,6 +7225,10 @@ html { scroll-behavior: smooth; }
     try { unstickProjectsBaymax(projectsWorld.baymax); } catch (_) {}
     restoreParentFocus();
     projectsWorld.eHeld = true;
+    // Mark ESC as "already held" so the projects-world ESC-exit handler
+    // doesn't treat the next-frame (bubble-set) keys['escape'] = true as a
+    // fresh press and bounce the player to the cobble world.
+    projectsWorld._lastEscape = true;
   }
   projectsWorld.fullyExitBoardView = fullyExitBoardView;
 
@@ -9508,10 +9512,16 @@ html { scroll-behavior: smooth; }
     maybeFootstep(result === 'walking', dt);
     if (result === 'walking') maybeStartHintFade();
 
-    // Return to cobble: triggered by walking off the right edge OR by
-    // pressing ESC while in the world (mirrors the beach's ESC exit).
+    // Return to cobble: triggered by walking off the right edge OR by a
+    // FRESH press of ESC while in the world (mirrors the beach's ESC exit).
+    // Tracking the rising edge prevents the ESC press that closes the
+    // cork-board view from immediately bouncing the player to cobble — when
+    // fullyExitBoardView() runs it sets _lastEscape = true so the next-
+    // frame "still held" escape isn't re-counted as a new press.
     const wantsExitByEdge = b.position.x >= PROJECTS_BOUNDS.maxX - 0.05;
-    const wantsExitByEsc  = !!keys['escape'];
+    const escapeNow       = !!keys['escape'];
+    const wantsExitByEsc  = escapeNow && !projectsWorld._lastEscape;
+    projectsWorld._lastEscape = escapeNow;
     if ((wantsExitByEdge || wantsExitByEsc) && !projectsWorld.returning) {
       projectsWorld.returning = true;
       keys['escape'] = false;
