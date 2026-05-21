@@ -6,7 +6,7 @@
 <title>Noah Benjamin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Anton&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Anton&display=swap" rel="stylesheet" />
 <style>
   html, body {
     margin: 0; padding: 0; overflow: hidden;
@@ -624,12 +624,21 @@
   }
   body.psych-scrolling #psych-scroll { display: block; }
   .psych-section {
-    min-height: 100vh;
+    /* Sections used to be 100vh apart — that meant a lot of scrolling.
+       Now ~50vh each (hero is still full-height) so sections sit closer
+       together; the JS fade keeps only the centred one fully opaque. */
+    min-height: 50vh;
     box-sizing: border-box;
-    padding: 8vh 6vw;
+    padding: 3vh 6vw;
     display: flex;
     flex-direction: column;
     position: relative;
+  }
+  /* The hero (first section under #psych-scroll) keeps the full viewport
+     so the underwater scene + scroll hint have room to breathe before
+     content starts coming in. */
+  #psych-scroll > .psych-section:first-of-type {
+    min-height: 100vh;
   }
   .psych-section.right-aligned { align-items: flex-end; text-align: right; }
   .psych-section.left-aligned  { align-items: flex-start; text-align: left; }
@@ -639,13 +648,8 @@
   .psych-section.bot  { justify-content: flex-end; }
   .psych-section .psych-card {
     max-width: 460px;
-    opacity: 0;
-    transform: translateY(28px);
-    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
-  }
-  .psych-section.in-view .psych-card {
-    opacity: 1;
-    transform: translateY(0);
+    opacity: 0;                     /* JS sets opacity per-frame on scroll */
+    will-change: opacity;
   }
   .psych-title {
     font-family: 'Anton', Impact, 'Arial Narrow Bold', sans-serif;
@@ -660,7 +664,7 @@
     font-family: 'Cormorant Garamond', Georgia, serif;
     font-style: italic;
     font-size: clamp(20px, 2.2vw, 28px);
-    font-weight: 400;
+    font-weight: 600;
     letter-spacing: 0.04em;
     margin: 0 0 6px;
     color: #000;
@@ -676,6 +680,7 @@
   .psych-body {
     font-family: 'Cormorant Garamond', Georgia, serif;
     font-size: clamp(17px, 1.4vw, 22px);
+    font-weight: 600;
     line-height: 1.55;
     margin: 0;
     color: #000;
@@ -683,6 +688,7 @@
   .psych-list {
     font-family: 'Cormorant Garamond', Georgia, serif;
     font-size: clamp(17px, 1.4vw, 22px);
+    font-weight: 600;
     line-height: 1.7;
     list-style: none;
     margin: 0;
@@ -7885,24 +7891,45 @@ html { scroll-behavior: smooth; }
   }
 
   // ---- Psych (underwater) scroll-driven introduction ----
-  // Fades each section in as it reaches the viewport, hides the "scroll" hint
-  // once the user starts scrolling, and triggers the cobble-world transition
-  // when the user scrolls past the last section.
-  let _psychScrollIO = null;
+  // Each section's card opacity is computed every scroll tick: fully opaque
+  // while its centre is in the "safe band" between (one Baymax-height down
+  // from the top) and (one Baymax-height up from the bottom).  Outside the
+  // band, opacity fades to 0.  This means text only ever appears AROUND
+  // Baymax, never touching the very top or bottom of the screen.
+  // BAYMAX_FRAC = roughly Baymax's on-screen vertical extent.  His scene
+  // camera is at z=8 with FOV 50, scale 0.95 → he occupies ~28 % of vh.
+  const BAYMAX_FRAC = 0.28;
+  let _psychSections = null;
   function _psychScrollObserve() {
-    const sections = document.querySelectorAll('#psych-scroll .psych-section');
-    if (!sections.length) return;
-    if (_psychScrollIO) _psychScrollIO.disconnect();
-    _psychScrollIO = new IntersectionObserver((entries) => {
-      for (const e of entries) {
-        if (e.isIntersecting) {
-          e.target.classList.add('in-view');
-        }
+    _psychSections = Array.from(document.querySelectorAll('#psych-scroll .psych-section'));
+    _psychUpdateFades();
+  }
+  window.addEventListener('resize', () => { if (stage === 'psych') _psychUpdateFades(); });
+  function _psychUpdateFades() {
+    if (!_psychSections || stage !== 'psych') return;
+    const vh = window.innerHeight;
+    const baymaxH = vh * BAYMAX_FRAC;
+    for (const section of _psychSections) {
+      const card = section.querySelector('.psych-card');
+      if (!card) continue;
+      const rect = section.getBoundingClientRect();
+      // y of the card's vertical centre, expressed in viewport coords
+      const cy = rect.top + rect.height / 2;
+      let op;
+      if (cy < 0 || cy > vh) {
+        op = 0;
+      } else if (cy < baymaxH) {
+        // fading out as centre approaches the very top
+        op = cy / baymaxH;
+      } else if (cy > vh - baymaxH) {
+        // fading in as centre rises from the very bottom
+        op = (vh - cy) / baymaxH;
+      } else {
+        op = 1;
       }
-    }, { threshold: 0.35 });
-    for (const s of sections) {
-      s.classList.remove('in-view');
-      _psychScrollIO.observe(s);
+      // gentle easing so the fade isn't perfectly linear
+      op = Math.max(0, Math.min(1, op));
+      card.style.opacity = (op * op * (3 - 2 * op)).toFixed(3);
     }
   }
   // Arrow keys (and space / PageUp / PageDown / Home / End) drive the page
@@ -7939,6 +7966,7 @@ html { scroll-behavior: smooth; }
   let _psychScrollFiredEnd = false;
   window.addEventListener('scroll', () => {
     if (stage !== 'psych') return;
+    _psychUpdateFades();
     if (window.scrollY > 50) document.body.classList.add('has-scrolled');
     // When the user has scrolled to (or near) the bottom of the
     // introduction, transition to the cobblestone world.
