@@ -657,6 +657,9 @@
   .psych-section.top  { justify-content: flex-start; }
   .psych-section.mid  { justify-content: center; }
   .psych-section.bot  { justify-content: flex-end; }
+  /* `.tight` sections sit closer to their neighbours — used for the two
+     "WHAT I DO" panels (paattikiiltoon + Arctic15) that belong together. */
+  .psych-section.tight { min-height: 32vh; padding-top: 0; padding-bottom: 0; }
   .psych-section .psych-card {
     /* compact horizontally so it stays tight against the screen edge and
        can never reach the centre where Baymax is swimming */
@@ -789,48 +792,26 @@
     </div>
   </section>
 
-  <section class="psych-section right-aligned mid">
-    <div class="psych-card">
-      <h2 class="psych-sub">STUDIES</h2>
-      <p class="psych-body">Just finished Finnish lukio at <b>Etelä-Tapiolan lukio</b>. I've applied to <b>Bioinformation Technology</b> (Diploma Insinööri) at <b>Aalto University</b> and I'm hoping to start there in the autumn.</p>
-      <p class="psych-body" style="margin-top:10px;">I enjoy maths, biology, physics and chemistry. On the side I'm slowly learning Python and working through differential equations on Khan Academy.</p>
-    </div>
-  </section>
-
-  <section class="psych-section right-aligned mid">
-    <div class="psych-card">
-      <h2 class="psych-sub">NEXT UP</h2>
-      <p class="psych-body">Finnish army in July, heading to <b>RUK</b> in Upinniemi. I'm planning to stay the full year and use any quiet hours to keep reading and study languages.</p>
-    </div>
-  </section>
-
   <!-- WHAT I DO — switches sides, now on the LEFT -->
   <section class="psych-section left-aligned mid">
     <div class="psych-card">
-      <p class="psych-eyebrow">a small business, a degree on the way, some volunteer work</p>
+      <p class="psych-eyebrow">a small business, some volunteer work</p>
       <h1 class="psych-title">WHAT<br>I DO</h1>
-      <p class="psych-body" style="margin-top:14px;">A boat-detailing business, volunteering with the Arctic15 team, and studying my way toward bioinformation technology at Aalto.</p>
+      <p class="psych-body" style="margin-top:14px;">A boat-detailing business and operations volunteering at one of Northern Europe's biggest tech conferences.</p>
     </div>
   </section>
 
-  <section class="psych-section left-aligned mid">
+  <section class="psych-section left-aligned mid tight">
     <div class="psych-card">
       <h2 class="psych-sub">PAATTIKIILTOON.FI</h2>
       <p class="psych-body">Founder and CEO of <b>paattikiiltoon.fi</b>, a small boat-detailing business in Finland — waxing, cleaning and polishing (Y-tunnus registered). I run the whole thing: customer contact, scheduling, the work itself, and the side admin that comes with it.</p>
     </div>
   </section>
 
-  <section class="psych-section left-aligned mid">
+  <section class="psych-section left-aligned mid tight">
     <div class="psych-card">
       <h2 class="psych-sub">ARCTIC15</h2>
       <p class="psych-body"><b>Team Lead of Operations</b> at <b>Arctic15</b>, one of Northern Europe's largest VC and tech conferences. I lead a team of <b>24 volunteers</b> across the three event days — keeping the logistics, hospitality and on-site programme running calmly behind the scenes.</p>
-    </div>
-  </section>
-
-  <section class="psych-section left-aligned mid">
-    <div class="psych-card">
-      <h2 class="psych-sub">WHERE I'M HEADING</h2>
-      <p class="psych-body">Long-term I'd love to work in technical sales for biotech — helping research teams find the right specialised lab instruments for what they're trying to do. Still learning my way toward it.</p>
     </div>
   </section>
 
