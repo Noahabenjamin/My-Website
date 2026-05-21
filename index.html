@@ -686,32 +686,29 @@
     letter-spacing: 0.05em;
     color: #ffffff;
   }
-  /* "scroll down" hint — sits at the bottom of the first viewport. */
+  /* Subtle scroll hint — sits at the bottom of the first viewport. */
   #psych-scroll-hint {
     position: fixed;
-    bottom: 36px;
+    bottom: 22px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 27;
     font-family: 'Cormorant Garamond', Georgia, serif;
     font-style: italic;
     font-weight: 400;
-    font-size: 13px;
-    letter-spacing: 0.30em;
-    text-transform: uppercase;
-    color: rgba(245, 239, 226, 0.78);
-    text-shadow: 0 2px 14px rgba(0, 30, 50, 0.55);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: rgba(245, 239, 226, 0.42);
     user-select: none;
     pointer-events: none;
     display: none;
-    animation: psych-hint-bob 1.8s ease-in-out infinite;
+    animation: psych-hint-bob 2.4s ease-in-out infinite;
   }
   #psych-scroll-hint::after {
     content: '↓';
-    display: block;
-    margin-top: 8px;
-    font-size: 16px;
-    letter-spacing: 0;
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 11px;
     opacity: 0.7;
   }
   body.psych-scrolling #psych-scroll-hint { display: block; }
@@ -737,7 +734,7 @@
 <!-- Skip-to-cobble button shown only during the underwater (psych) scene. -->
 <button id="psych-skip" type="button">skip →</button>
 <!-- Scroll hint that floats above the bottom edge during psych. -->
-<div id="psych-scroll-hint">scroll to read more</div>
+<div id="psych-scroll-hint">scroll</div>
 <!-- Scroll-driven introduction sections, shown only during the psych stage.
      The WebGL canvas stays fixed behind these while they scroll past. -->
 <div id="psych-scroll" aria-hidden="true">
@@ -7901,6 +7898,30 @@ html { scroll-behavior: smooth; }
       _psychScrollIO.observe(s);
     }
   }
+  // Arrow keys (and space / PageUp / PageDown / Home / End) drive the page
+  // scroll during the psych stage.  Wheel + touchpad already scroll
+  // natively because body has overflow-y:auto while psych-scrolling is
+  // active — this handler just adds keyboard parity.
+  window.addEventListener('keydown', (e) => {
+    if (stage !== 'psych') return;
+    // Don't capture keys while focus is inside an input / textarea / menu.
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    const k = (e.key || '').toLowerCase();
+    const vh = window.innerHeight;
+    let dy = null;
+    if (k === 'arrowdown') dy = vh * 0.18;
+    else if (k === 'arrowup') dy = -vh * 0.18;
+    else if (k === ' ' || k === 'pagedown') dy = vh * 0.9;
+    else if (k === 'pageup') dy = -vh * 0.9;
+    else if (k === 'home') { window.scrollTo({ top: 0, behavior: 'smooth' }); e.preventDefault(); return; }
+    else if (k === 'end')  { window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }); e.preventDefault(); return; }
+    if (dy !== null) {
+      e.preventDefault();
+      window.scrollBy({ top: dy, left: 0, behavior: 'smooth' });
+    }
+  }, { passive: false });
+
   let _psychScrollFiredEnd = false;
   window.addEventListener('scroll', () => {
     if (stage !== 'psych') return;
@@ -7984,6 +8005,11 @@ html { scroll-behavior: smooth; }
     if (name === 'psych') {
       fade.style.opacity = '0';
       flashCut();
+      // Kill any residual dark vignette from the intro / fall stages — the
+      // psych underwater scene should have clean corners (only the WebGL
+      // shader's own gentle vignette, no DOM overlay).
+      vignette.style.opacity = '0';
+      vignette.style.background = '';
       if (psych) { psych.splashFired = false; psych.splashEmitT = 0; }
       if (psych && psych.bgMat) psych.bgMat.uniforms.uFadeOut.value = 0.0;
       // Enable page scroll + show the introduction text overlay.
