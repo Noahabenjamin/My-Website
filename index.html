@@ -774,7 +774,7 @@
        this site is for, before the section-by-section breakdown. -->
   <section class="psych-section center-aligned mid">
     <div class="psych-card">
-      <p class="psych-body"><b>Noah Benjamin</b> — building toward technical sales in biotech. 19, Finnish-French-Egyptian. Studying bioinformation technology at Aalto from 2027. Before that mandatory military service in Upinniemi. Founder of paattikiiltoon.fi. Operations lead at Arctic15. I'm interested in the people who sit between deep technical work and customers — application scientists, sales engineers, technical product managers in biotech. This site is where I document what I'm learning on the way there.</p>
+      <p class="psych-body"><b>Noah Benjamin</b> — building toward technical sales in biotech. 19, Finnish-French-Egyptian. Studying bioinformation technology at Aalto from 2027.</p>
     </div>
   </section>
 
@@ -783,7 +783,7 @@
     <div class="psych-card">
       <p class="psych-eyebrow">19 — finnish-french-egyptian</p>
       <h1 class="psych-title">WHO<br>AM I</h1>
-      <p class="psych-body" style="margin-top:14px;">French, Finnish and Egyptian. I grew up between those three places and live in Helsinki right now.</p>
+      <p class="psych-body" style="margin-top:14px;"><b>Noah Benjamin</b> — building toward technical sales in biotech. 19, Finnish-French-Egyptian. Studying bioinformation technology at Aalto from 2027.</p>
     </div>
   </section>
 
@@ -819,6 +819,16 @@
     <div class="psych-card">
       <h2 class="psych-sub">ARCTIC15</h2>
       <p class="psych-body"><b>Team Lead of Operations</b> at <b>Arctic15</b>, one of Northern Europe's largest VC and tech conferences. I lead a team of <b>24 volunteers</b> across two event days — keeping the logistics, hospitality and on-site programme running calmly behind the scenes.</p>
+    </div>
+  </section>
+
+  <!-- WHERE TO NEXT — right-aligned like LANGUAGES, closes with the
+       elevator-pitch sentences about who I want to work with. -->
+  <section class="psych-section right-aligned mid">
+    <div class="psych-card">
+      <h2 class="psych-sub">WHERE TO NEXT</h2>
+      <p class="psych-body" style="margin-top:14px;">Goal: Master's at ETH, EPFL or Karolinska Institutet.</p>
+      <p class="psych-body" style="margin-top:10px;">I'm interested in the people who sit between deep technical work and customers — application scientists, sales engineers, technical product managers in biotech. This site is where I document what I'm learning on the way there.</p>
     </div>
   </section>
 
@@ -884,7 +894,7 @@
 <div id="fade"></div>
 <div id="words" aria-hidden="true">
   <div class="word top">relax</div>
-  <div class="word right">art</div>
+  <div class="word right" style="display:none;">art</div>
   <div class="word bottom">contact</div>
   <div class="word left">projects</div>
 </div>
@@ -9727,8 +9737,7 @@ html { scroll-behavior: smooth; }
     if (vy < -1 && Math.abs(vx) < ndcGapW / 2) return { allowed: true, exit: 'contact' };
     // left edge — "projects"
     if (vx < -1 && Math.abs(vy) < ndcGapH / 2) return { allowed: true, exit: 'projects' };
-    // right edge — "art"
-    if (vx > 1 && Math.abs(vy) < ndcGapH / 2) return { allowed: true, exit: 'art' };
+    // right edge — "art" (hidden for now; right edge is a wall)
 
     return { allowed: false };
   }
