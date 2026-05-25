@@ -770,6 +770,14 @@
   <!-- Hero (first viewport): empty, just the underwater scene + scroll hint -->
   <section class="psych-section center-aligned mid"><div class="psych-card"></div></section>
 
+  <!-- Elevator-pitch bio: a single paragraph summing up who I am and what
+       this site is for, before the section-by-section breakdown. -->
+  <section class="psych-section center-aligned mid">
+    <div class="psych-card">
+      <p class="psych-body"><b>Noah Benjamin</b> — building toward technical sales in biotech. 19, Finnish-French-Egyptian. Studying bioinformation technology at Aalto from 2027. Before that mandatory military service in Upinniemi. Founder of paattikiiltoon.fi. Operations lead at Arctic15. I'm interested in the people who sit between deep technical work and customers — application scientists, sales engineers, technical product managers in biotech. This site is where I document what I'm learning on the way there.</p>
+    </div>
+  </section>
+
   <!-- WHO AM I — on the right, several sections that reveal as the user scrolls -->
   <section class="psych-section right-aligned mid">
     <div class="psych-card">
@@ -783,12 +791,11 @@
     <div class="psych-card">
       <h2 class="psych-sub">LANGUAGES</h2>
       <ul class="psych-list">
-        <li><b>Fluent</b> — French, Finnish, English</li>
-        <li><b>B1</b> — Spanish</li>
-        <li><b>A2</b> — Arabic</li>
-        <li><b>Learning</b> — Mandarin Chinese</li>
+        <li>French, Finnish, English — <b>Fluent</b></li>
+        <li>Spanish — <b>B1</b></li>
+        <li>Arabic — <b>A2</b></li>
+        <li>Mandarin Chinese — <b>Learning</b></li>
       </ul>
-      <p class="psych-body" style="margin-top:10px;">I'd like to get each of these closer to fluency over time.</p>
     </div>
   </section>
 
@@ -804,14 +811,14 @@
   <section class="psych-section left-aligned mid tight">
     <div class="psych-card">
       <h2 class="psych-sub">PAATTIKIILTOON.FI</h2>
-      <p class="psych-body">Founder and CEO of <b>paattikiiltoon.fi</b>, a small boat-detailing business in Finland — waxing, cleaning and polishing (Y-tunnus registered). I run the whole thing: customer contact, scheduling, the work itself, and the side admin that comes with it.</p>
+      <p class="psych-body">Founder and CEO of <b>paattikiiltoon.fi</b>, a boat-detailing business in Finland.</p>
     </div>
   </section>
 
   <section class="psych-section left-aligned mid tight">
     <div class="psych-card">
       <h2 class="psych-sub">ARCTIC15</h2>
-      <p class="psych-body"><b>Team Lead of Operations</b> at <b>Arctic15</b>, one of Northern Europe's largest VC and tech conferences. I lead a team of <b>24 volunteers</b> across the three event days — keeping the logistics, hospitality and on-site programme running calmly behind the scenes.</p>
+      <p class="psych-body"><b>Team Lead of Operations</b> at <b>Arctic15</b>, one of Northern Europe's largest VC and tech conferences. I lead a team of <b>24 volunteers</b> across two event days — keeping the logistics, hospitality and on-site programme running calmly behind the scenes.</p>
     </div>
   </section>
 
@@ -937,10 +944,12 @@ function initIntroSequence() {
   if (skipBtn && isReturning) {
     skipBtn.style.display = 'block';
     skipBtn.addEventListener('click', () => {
-      // Bypass video + crumple entirely
+      // Bypass video + crumple + the entire white-world walk-into-hole +
+      // fall cinematic, landing the user directly in the underwater scene.
       _endedFired = true;
       overlay.classList.add('hidden');
       bootAfterIntro();
+      if (typeof window._setStage === 'function') window._setStage('psych');
       setTimeout(() => overlay.classList.add('gone'), 600);
     });
   }
@@ -8088,6 +8097,10 @@ html { scroll-behavior: smooth; }
     const ucEl = document.getElementById('under-construction');
     if (ucEl) ucEl.classList.toggle('visible', name === 'art');
   }
+  // Expose setStage so the intro skip button (defined before start() runs) can
+  // jump straight into the underwater world without first running the white-
+  // world walk-to-hole + fall cinematic.
+  window._setStage = setStage;
 
   // ---- vignette (intro) ----
   // Starts further from the hole (12 m) and ramps to a much more intense
