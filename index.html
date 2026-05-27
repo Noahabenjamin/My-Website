@@ -1681,73 +1681,113 @@ function buildJumpInFaceTexture() {
   return tex;
 }
 
-// Small "JUMP IN" panel suspended from two thin ropes that run up off the
-// top of the screen.  The panel is parented to a pivot at its top-right
-// corner so that, once the left rope detaches, gravity swings the panel
-// around the surviving (right) rope until it dangles sideways.
+// Small roadside "JUMP IN" marker: two short wooden pillars rooted in the
+// ground, a horizontal beam joining them at the top, and a small wooden
+// panel suspended from the beam by two ropes.  The panel is parented to a
+// pivot at its top-right corner so that, once the left rope detaches,
+// gravity swings the panel around the surviving (right) rope until it
+// dangles sideways.
 function buildJumpInSign() {
   const group = new THREE.Group();
 
-  const panelW = 0.95, panelH = 0.45, panelD = 0.05;
-  const halfSep = panelW * 0.46;
-  // Panel rest height (centre) in the group's local frame; everything else
-  // is sized off this so swapping the world-space scale stays consistent.
-  const PANEL_CENTER_Y = 1.6;
-  const PANEL_TOP_Y    = PANEL_CENTER_Y + panelH * 0.5;
-  // Ropes terminate well above the camera's view so they appear to come
-  // from somewhere off-screen up top.
-  const CEILING_Y = 10.0;
-  const ropeLen   = CEILING_Y - PANEL_TOP_Y;
-  const ropeMidY  = (CEILING_Y + PANEL_TOP_Y) * 0.5;
-  const ropeR     = 0.024;
+  // Pretty small — the whole thing sits a bit under a metre tall.
+  const pillarH = 0.55;
+  const pillarW = 0.055;        // square cross-section
+  const panelW  = 0.42;
+  const panelH  = 0.18;
+  const panelD  = 0.030;
+  const ropeLen = 0.15;
+  const beamH   = 0.055;
+  const beamD   = 0.070;
+  const ropeR   = 0.012;
+  // Ropes attach at the panel's left and right edges, so halfSep = panelW/2.
+  const halfSep = panelW * 0.5;
+  // Beam slightly overhangs the rope attachments on each side.
+  const beamLen = panelW + 0.18;
+  // Pillars at the very ends of the beam.
+  const pillarX = beamLen * 0.5 - pillarW * 0.5;
+  // Vertical layout in the group's local frame.
+  const beamBottomY  = pillarH;
+  const beamCenterY  = pillarH + beamH * 0.5;
+  const ropeCenterY  = beamBottomY - ropeLen * 0.5;
+  const panelTopY    = beamBottomY - ropeLen;
+  const panelCenterY = panelTopY - panelH * 0.5;
 
+  // ---- materials ----
+  const woodCanvas = buildWoodCanvas(256, 256);
+  addWeathering(woodCanvas);
+  const woodTex = new THREE.CanvasTexture(woodCanvas);
+  woodTex.colorSpace = THREE.SRGBColorSpace;
+  const sideMat = new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.95 });
+  const faceTex = buildJumpInFaceTexture();
+  const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.8 });
   const ropeMat = new THREE.MeshStandardMaterial({
     color: 0x8e6a3f, roughness: 0.95, metalness: 0.0,
   });
 
+  // ---- pillars ----
+  const leftPillar = new THREE.Mesh(
+    new THREE.BoxGeometry(pillarW, pillarH, pillarW),
+    sideMat
+  );
+  leftPillar.position.set(-pillarX, pillarH * 0.5, 0);
+  leftPillar.castShadow = true;
+  group.add(leftPillar);
+  const rightPillar = new THREE.Mesh(
+    new THREE.BoxGeometry(pillarW, pillarH, pillarW),
+    sideMat
+  );
+  rightPillar.position.set(pillarX, pillarH * 0.5, 0);
+  rightPillar.castShadow = true;
+  group.add(rightPillar);
+
+  // ---- beam across the top ----
+  const beam = new THREE.Mesh(
+    new THREE.BoxGeometry(beamLen, beamH, beamD),
+    sideMat
+  );
+  beam.position.set(0, beamCenterY, 0);
+  beam.castShadow = true;
+  group.add(beam);
+
+  // ---- ropes from the beam down to the panel ----
   const leftRope = new THREE.Mesh(
     new THREE.CylinderGeometry(ropeR, ropeR, ropeLen, 10),
     ropeMat
   );
-  leftRope.position.set(-halfSep, ropeMidY, 0);
+  leftRope.position.set(-halfSep, ropeCenterY, 0);
   leftRope.castShadow = true;
   group.add(leftRope);
-
   const rightRope = new THREE.Mesh(
     new THREE.CylinderGeometry(ropeR, ropeR, ropeLen, 10),
     ropeMat
   );
-  rightRope.position.set(halfSep, ropeMidY, 0);
+  rightRope.position.set(halfSep, ropeCenterY, 0);
   rightRope.castShadow = true;
   group.add(rightRope);
 
+  // ---- pivot + panel ----
   // Pivot at the panel's TOP-RIGHT CORNER (where the right rope meets the
   // panel).  When the left rope detaches, gravity swings the panel around
   // this point — the rectangle's centre of mass settles directly below the
   // pivot, which produces a natural "hanging sideways" final pose.
   const pivot = new THREE.Group();
-  pivot.position.set(halfSep, PANEL_TOP_Y, 0);
+  pivot.position.set(halfSep, panelTopY, 0);
   group.add(pivot);
-
-  const poleCanvas = buildWoodCanvas(256, 256);
-  addWeathering(poleCanvas);
-  const poleTex = new THREE.CanvasTexture(poleCanvas);
-  poleTex.colorSpace = THREE.SRGBColorSpace;
-  const sideMat = new THREE.MeshStandardMaterial({ map: poleTex, roughness: 0.95 });
-  const faceTex = buildJumpInFaceTexture();
-  const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.8 });
   const panel = new THREE.Mesh(
     new THREE.BoxGeometry(panelW, panelH, panelD),
     [sideMat, sideMat, sideMat, sideMat, faceMat, sideMat]
   );
-  // Panel sits below-and-left of the pivot so the pivot lines up with the
-  // panel's top-right corner.
   panel.position.set(-panelW * 0.5, -panelH * 0.5, 0);
   panel.castShadow = true;
   pivot.add(panel);
 
-  return { group, leftRope, rightRope, pivot, panel,
-           panelW, panelH, ropeLen, ropeMidY, halfSep, ceilingY: CEILING_Y };
+  return {
+    group, leftPillar, rightPillar, beam,
+    leftRope, rightRope, pivot, panel,
+    panelW, panelH, ropeLen, halfSep,
+    ropeAnchorY: beamBottomY,
+  };
 }
 
 // ==========================================================================
@@ -2120,6 +2160,46 @@ function playCreak() {
   lfo.stop(now + dur + 0.05);
   src.stop(now + dur + 0.05);
 }
+// Rusty-hinge squeak — layered on top of the wood creak when the JUMP IN
+// sign's rope snaps.  High, tinny, with rapid pitch wobble that reads as
+// a metal bracket pivoting through itself.
+function playRustySqueak() {
+  if (!_soundOn) return;
+  const actx = _getAudioCtx();
+  if (!actx) return;
+  const now = actx.currentTime;
+  const dur = 0.55;
+  // Sawtooth carrier for harmonics-rich "metallic" feel.
+  const osc = actx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(1750, now);
+  osc.frequency.exponentialRampToValueAtTime(900, now + dur);
+  // LFO modulates the pitch fast → rapid squeak warbles.
+  const lfo = actx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 13 + Math.random() * 5;
+  const lfoGain = actx.createGain();
+  lfoGain.gain.value = 260;
+  lfo.connect(lfoGain);
+  lfoGain.connect(osc.frequency);
+  // Tight bandpass keeps it tinny and away from the wood-creak band.
+  const bp = actx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(1650, now);
+  bp.frequency.exponentialRampToValueAtTime(950, now + dur);
+  bp.Q.value = 6;
+  // Master envelope — short attack, longer tail than the creak so the
+  // listener still hears the squeak after the wood settles.
+  const env = actx.createGain();
+  env.gain.setValueAtTime(0.0001, now);
+  env.gain.exponentialRampToValueAtTime(0.18 * _volume, now + 0.045);
+  env.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+  osc.connect(bp); bp.connect(env); env.connect(actx.destination);
+  osc.start(now);
+  lfo.start(now);
+  osc.stop(now + dur + 0.05);
+  lfo.stop(now + dur + 0.05);
+}
 let _footstepTimer = 0;
 // Footsteps are currently DISABLED.  The synthesis above is left intact —
 // flip this flag to true to bring the kick + water-drop step sound back.
@@ -2246,13 +2326,13 @@ function buildWhiteWorld() {
   }
   scene.add(sign);
 
-  // "JUMP IN" sign: a small panel suspended from two thin ropes that run up
-  // off the top of the camera view.  Positioned to the left of the hole so
-  // its arrow naturally points down-and-right toward the rim.
+  // "JUMP IN" sign: a small two-pillar marker with a panel hanging from
+  // the crossbeam by two ropes.  Sits to the left of the hole, a touch
+  // north of the rim — close enough that the arrow visibly points at it.
   const jumpSign = buildJumpInSign();
-  const jumpAngle = THREE.MathUtils.degToRad(-55);
-  const jumpDist  = 2.45;
-  jumpSign.group.scale.setScalar(0.78);
+  const jumpAngle = THREE.MathUtils.degToRad(-70);
+  const jumpDist  = 1.85;
+  jumpSign.group.scale.setScalar(1.0);
   jumpSign.group.position.set(
     Math.sin(jumpAngle) * jumpDist,
     0,
@@ -4539,6 +4619,20 @@ function buildCorkBoardWithMap(opts = {}) {
       const name = props.NAME   || props.NAME_EN || props.ADMIN  || props.name || '';
       return iso === 'ISR' || name === 'Israel';
     }
+    // Countries that get a label drawn on the overlay.  Every country that
+    // has a pin (extracted from the COMPANIES list below), plus Egypt /
+    // Finland / France even when no pin sits on them.  Naming matches
+    // Natural Earth's NAME field for ne_110m_admin_0_countries.
+    const LABELED_COUNTRIES = new Set([
+      'United States of America', 'United Kingdom', 'Denmark',
+      'Switzerland', 'France', 'Germany', 'Belgium', 'China',
+      'India', 'Ireland', 'Australia', 'Japan',
+      'Egypt', 'Finland',
+    ]);
+    function isLabeled(props) {
+      const name = props.NAME || props.NAME_EN || props.ADMIN || props.name || '';
+      return LABELED_COUNTRIES.has(name);
+    }
     // Pull Natural Earth 110m administrative-0 boundaries from jsdelivr's
     // GitHub mirror.  ~250 KB; cached aggressively by the CDN.
     const NE_URL = 'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@v5.1.2/geojson/ne_110m_admin_0_countries.geojson';
@@ -4563,14 +4657,17 @@ function buildCorkBoardWithMap(opts = {}) {
         if (isExcluded(f.properties || {})) continue;
         forRings(f.geometry, (ring) => { pathRing(octx, ring); octx.stroke(); });
       }
-      // Overlay: country names.
+      // Overlay: country names — only on the small whitelist of countries
+      // that have a pin (or are explicitly always-labeled).  Smaller font so
+      // each label fits inside the country's outline at the zoomed-in scale.
       octx.fillStyle = STROKE;
       octx.textAlign = 'center'; octx.textBaseline = 'middle';
       const lScale = mw / 1280;
-      octx.font = `500 ${Math.round(14 * lScale)}px Inter, system-ui, sans-serif`;
+      octx.font = `500 ${Math.round(8 * lScale)}px Inter, system-ui, sans-serif`;
       for (const f of features) {
         const props = f.properties || {};
         if (isExcluded(props)) continue;
+        if (!isLabeled(props)) continue;
         const name = props.NAME || props.NAME_EN || props.ADMIN || props.name;
         if (!name) continue;
         let lon, lat;
@@ -4674,9 +4771,11 @@ function buildCorkBoardWithMap(opts = {}) {
   // Realistic board: one pin per biopharma HQ, raycastable for hover/click
   // interactions in the front-view zoom.
   const pinHeadMat = new THREE.MeshStandardMaterial({
-    color: 0xd02828, roughness: 0.28, metalness: 0.18,
-    emissive: 0x2a0808, emissiveIntensity: 0.18,
+    color: 0xd62828, roughness: 0.22, metalness: 0.0,
+    emissive: 0x1a0404, emissiveIntensity: 0.10,
   });
+  // pinShineMat is no longer used by the dome thumbtack but is kept around
+  // in case future pin styles want a brighter rim material.
   const pinShineMat = new THREE.MeshStandardMaterial({
     color: 0xea4646, roughness: 0.18, metalness: 0.22,
     emissive: 0x3a1010, emissiveIntensity: 0.18,
@@ -4685,61 +4784,43 @@ function buildCorkBoardWithMap(opts = {}) {
     color: 0x5a5d63, roughness: 0.25, metalness: 0.92,
   });
 
-  // Build one realistic push-pin (thumbtack):
-  //   * a tapered metal shaft pressed into the cork
-  //   * a slightly-tapered red plastic disc on top of the shaft
-  //   * a flattened upper-hemisphere "dome" sitting on the disc
+  // Build one realistic push-pin (classic dome thumbtack):
+  //   * sharp metal shaft hidden inside the cork (only the head is visible)
+  //   * a single solid red plastic head — full sphere flattened along the
+  //     pin axis so it reads as the familiar pressed-in thumbtack dome.
   // The mesh is returned as a group anchored at the cork surface
   // (local +Z = away from cork).
   function buildPushPin() {
     const pin = new THREE.Group();
+    const HEAD_R    = 0.026;          // dome radius (a touch bigger than the
+                                       // old disc so each pin reads clearly)
+    const HEAD_FLAT = 0.55;            // flatten factor along the pin axis
+    const SHAFT_R   = 0.0033;
+    const SHAFT_LEN = 0.020;
 
-    // shaft — sharp metal pin (tapered toward the embedded tip)
+    // Sharp metal shaft, hidden behind the cork (the pin is "pressed in").
     const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.0028, 0.0010, 0.022, 10),
+      new THREE.CylinderGeometry(SHAFT_R, SHAFT_R * 0.30, SHAFT_LEN, 10),
       pinShaftMat
     );
     shaft.rotation.x = Math.PI / 2;
-    shaft.position.z = 0.011;     // half-height above cork
-    shaft.castShadow = true;
+    shaft.position.z = -SHAFT_LEN * 0.45;
+    shaft.castShadow = false;
     pin.add(shaft);
 
-    // disc — slightly tapered plastic body
-    const disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.0195, 0.0220, 0.0060, 28),
+    // Glossy red plastic head — flush against the cork, dome facing out.
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(HEAD_R, 32, 18),
       pinHeadMat
     );
-    disc.rotation.x = Math.PI / 2;
-    disc.position.z = 0.022 + 0.0030;
-    disc.castShadow = true;
-    pin.add(disc);
+    head.scale.set(1, 1, HEAD_FLAT);
+    head.position.z = HEAD_R * HEAD_FLAT * 0.5;
+    head.castShadow = true;
+    pin.add(head);
 
-    // dome — flattened upper hemisphere (the "shiny" top)
-    const dome = new THREE.Mesh(
-      new THREE.SphereGeometry(0.0195, 22, 12, 0, Math.PI * 2, 0, Math.PI / 2),
-      pinShineMat
-    );
-    dome.rotation.x = -Math.PI / 2;
-    dome.scale.set(1, 0.42, 1);
-    dome.position.z = 0.022 + 0.0060;
-    dome.castShadow = true;
-    pin.add(dome);
-
-    // small specular highlight cap — even shinier ellipsoid at the top
-    const cap = new THREE.Mesh(
-      new THREE.SphereGeometry(0.0070, 16, 10),
-      new THREE.MeshStandardMaterial({
-        color: 0xffe5e0, roughness: 0.10, metalness: 0.0,
-        emissive: 0xff8060, emissiveIntensity: 0.45, transparent: true, opacity: 0.55,
-      })
-    );
-    cap.scale.set(1, 0.5, 1);
-    cap.position.set(-0.005, 0.004, 0.022 + 0.0085);
-    pin.add(cap);
-
-    // Expose the dome as the canonical raycast target.
-    pin.userData.raycastTarget = dome;
-    return { group: pin, shaft, disc, dome };
+    pin.userData.raycastTarget = head;
+    // disc stays null for back-compat with the raycast-targets list.
+    return { group: pin, shaft, disc: null, dome: head };
   }
 
   if (!realistic) {
@@ -4875,9 +4956,12 @@ function buildCorkBoardWithMap(opts = {}) {
       // tag the dome (raycast target) with the company index
       dome.userData.companyIdx   = i;
       dome.userData.isCompanyPin = true;
-      // also tag the disc so a near-rim click registers
-      disc.userData.companyIdx   = i;
-      disc.userData.isCompanyPin = true;
+      // The classic dome thumbtack has no separate disc mesh, but back-compat
+      // callers still pass `disc` through — tag it only if it actually exists.
+      if (disc) {
+        disc.userData.companyIdx   = i;
+        disc.userData.isCompanyPin = true;
+      }
       g.add(pin);
 
       companyPins.push({ company: c, group: pin, head: dome, disc, shaft });
@@ -7864,10 +7948,11 @@ html { scroll-behavior: smooth; }
           // Left rope visually "snaps": its bottom retracts a little because
           // it's no longer being pulled down by the panel's weight.
           const lr = white.jumpSign.leftRope;
-          const shrink = 0.94;
+          const shrink = 0.85;
           lr.scale.y = shrink;
-          lr.position.y = white.jumpSign.ceilingY - (white.jumpSign.ropeLen * shrink) * 0.5;
+          lr.position.y = white.jumpSign.ropeAnchorY - (white.jumpSign.ropeLen * shrink) * 0.5;
           playCreak();
+          playRustySqueak();
         }
       } else {
         // Rigid plate hinged at a corner: α = -(3g / (2·L_diag)) · sin(θ - θ_rest)
