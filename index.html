@@ -729,7 +729,7 @@
     font-family: 'Cormorant Garamond', Georgia, serif;
     font-style: italic;
     font-weight: 400;
-    font-size: 18px;
+    font-size: 22px;
     letter-spacing: 0.08em;
     color: rgba(0, 0, 0, 0.55);
     user-select: none;
@@ -741,7 +741,7 @@
     content: '↓';
     display: inline-block;
     margin-left: 8px;
-    font-size: 18px;
+    font-size: 22px;
     opacity: 0.7;
   }
   body.psych-scrolling #psych-scroll-hint { display: block; }
@@ -1618,13 +1618,6 @@ function buildSign() {
   post.receiveShadow = true;
   group.add(post);
 
-  // flat base block at the foot
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.16, 0.65), sideMat);
-  base.position.set(0, 0.08, -0.28);
-  base.castShadow = true;
-  base.receiveShadow = true;
-  group.add(base);
-
   // small dangling broken plank to keep the broken-down feel
   const broken = new THREE.Mesh(
     new THREE.BoxGeometry(0.85, 0.30, 0.12),
@@ -1636,6 +1629,111 @@ function buildSign() {
   group.add(broken);
 
   return group;
+}
+
+// "JUMP IN" texture — small wooden panel with the text and a diagonal arrow
+// pointing toward the hole (down-and-right on the panel face).
+function buildJumpInFaceTexture() {
+  const W = 1024, H = 512;
+  const wood = buildWoodCanvas(W, H);
+  addWeathering(wood);
+  const ctx = wood.getContext('2d');
+  // Title
+  let size = 240;
+  ctx.font = `bold ${size}px Georgia, serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const targetW = W * 0.78;
+  const measured = ctx.measureText('JUMP IN').width;
+  if (measured > 0) size = size * (targetW / measured);
+  ctx.font = `bold ${size}px Georgia, serif`;
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillText('JUMP IN', W / 2, H * 0.34 + 3);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('JUMP IN', W / 2, H * 0.34);
+  // Diagonal arrow pointing down-and-right toward the hole
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 22;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const ax0 = W * 0.34, ay0 = H * 0.60;
+  const ax1 = W * 0.72, ay1 = H * 0.92;
+  ctx.beginPath();
+  ctx.moveTo(ax0, ay0);
+  ctx.lineTo(ax1, ay1);
+  ctx.stroke();
+  const angle = Math.atan2(ay1 - ay0, ax1 - ax0);
+  const headLen = 64;
+  ctx.beginPath();
+  ctx.moveTo(ax1, ay1);
+  ctx.lineTo(ax1 - headLen * Math.cos(angle - 0.6), ay1 - headLen * Math.sin(angle - 0.6));
+  ctx.moveTo(ax1, ay1);
+  ctx.lineTo(ax1 - headLen * Math.cos(angle + 0.6), ay1 - headLen * Math.sin(angle + 0.6));
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(wood);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+// Two thin wooden poles with a small "JUMP IN" panel hanging between them.
+// The panel is parented to a pivot at the RIGHT pole's top so the intro
+// animation can drop it sideways once the left pole "breaks".
+function buildJumpInSign() {
+  const group = new THREE.Group();
+
+  const poleCanvas = buildWoodCanvas(256, 256);
+  addWeathering(poleCanvas);
+  const poleTex = new THREE.CanvasTexture(poleCanvas);
+  poleTex.colorSpace = THREE.SRGBColorSpace;
+  const woodMat = new THREE.MeshStandardMaterial({ map: poleTex, roughness: 0.92 });
+
+  const poleH  = 1.9;
+  const poleR  = 0.045;
+  const panelW = 0.95, panelH = 0.45, panelD = 0.05;
+  const halfSep = panelW * 0.46;
+
+  const leftPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(poleR, poleR, poleH, 14),
+    woodMat
+  );
+  leftPole.position.set(-halfSep, poleH / 2, 0);
+  leftPole.castShadow = true;
+  group.add(leftPole);
+
+  const rightPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(poleR, poleR, poleH, 14),
+    woodMat
+  );
+  rightPole.position.set(halfSep, poleH / 2, 0);
+  rightPole.castShadow = true;
+  group.add(rightPole);
+
+  // Pivot sits at the right pole's top — the panel hangs from it.  Once the
+  // left pole detaches, animating `pivot.rotation.z` from 0 → -π/2 swings the
+  // panel down so it dangles vertically off the surviving pole.
+  const pivot = new THREE.Group();
+  pivot.position.set(halfSep, poleH - panelH * 0.5, 0);
+  group.add(pivot);
+
+  const faceTex = buildJumpInFaceTexture();
+  const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.8 });
+  const sideMat = new THREE.MeshStandardMaterial({ map: poleTex, roughness: 0.95 });
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(panelW, panelH, panelD),
+    [sideMat, sideMat, sideMat, sideMat, faceMat, sideMat]
+  );
+  // Offset panel so the pivot lines up with its right edge.
+  panel.position.set(-panelW * 0.5, 0, 0);
+  panel.castShadow = true;
+  pivot.add(panel);
+
+  return { group, leftPole, rightPole, pivot, panel, panelW, panelH };
 }
 
 // ==========================================================================
@@ -1966,6 +2064,48 @@ function playFootstep() {
   dropOsc.start(now);
   dropOsc.stop(now + 0.18);
 }
+// Wooden creak — used when the "jump in" sign's left pole snaps and the
+// panel pivots over to hang sideways from the surviving pole.
+function playCreak() {
+  if (!_soundOn) return;
+  const actx = _getAudioCtx();
+  if (!actx) return;
+  const now = actx.currentTime;
+  const dur = 0.75;
+  // White-noise base, bandpass-filtered into the wood-creak range, then
+  // amplitude-modulated by a slow LFO to get that stuttering creak shape.
+  const sr = actx.sampleRate;
+  const buf = actx.createBuffer(1, Math.floor(sr * dur), sr);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.55;
+  const src = actx.createBufferSource();
+  src.buffer = buf;
+  const bp = actx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(320, now);
+  bp.frequency.exponentialRampToValueAtTime(170, now + dur);
+  bp.Q.value = 7;
+  // LFO that wobbles the gain so the creak "stutters" naturally
+  const trem = actx.createGain();
+  trem.gain.setValueAtTime(0.55, now);
+  const lfo = actx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 9 + Math.random() * 4;
+  const lfoGain = actx.createGain();
+  lfoGain.gain.value = 0.35;
+  lfo.connect(lfoGain);
+  lfoGain.connect(trem.gain);
+  // Master envelope
+  const env = actx.createGain();
+  env.gain.setValueAtTime(0.0001, now);
+  env.gain.exponentialRampToValueAtTime(0.32 * _volume, now + 0.05);
+  env.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+  src.connect(bp); bp.connect(trem); trem.connect(env); env.connect(actx.destination);
+  lfo.start(now);
+  src.start(now);
+  lfo.stop(now + dur + 0.05);
+  src.stop(now + dur + 0.05);
+}
 let _footstepTimer = 0;
 // Footsteps are currently DISABLED.  The synthesis above is left intact —
 // flip this flag to true to bring the kick + water-drop step sound back.
@@ -2054,8 +2194,8 @@ function buildWhiteWorld() {
 
   const sign = buildSign();
   const signClockAngle = THREE.MathUtils.degToRad(30);
-  const signDist = 2.85;            // a touch closer to the hole
-  sign.scale.setScalar(0.85);       // panel + post + text all 15% smaller
+  const signDist = 2.35;            // a touch closer to the hole
+  sign.scale.setScalar(0.70);       // panel + post + text all 30% smaller
   sign.position.set(
     Math.sin(signClockAngle) * signDist,
     0,
@@ -2092,12 +2232,36 @@ function buildWhiteWorld() {
   }
   scene.add(sign);
 
+  // "JUMP IN" sign: two thin poles holding a small panel that points at the
+  // hole.  Positioned to the left of the hole so its arrow naturally points
+  // down-and-right toward the rim.
+  const jumpSign = buildJumpInSign();
+  const jumpAngle = THREE.MathUtils.degToRad(-55);
+  const jumpDist  = 2.45;
+  jumpSign.group.scale.setScalar(0.78);
+  jumpSign.group.position.set(
+    Math.sin(jumpAngle) * jumpDist,
+    0,
+    -Math.cos(jumpAngle) * jumpDist
+  );
+  {
+    const dx = camera.position.x - jumpSign.group.position.x;
+    const dz = camera.position.z - jumpSign.group.position.z;
+    jumpSign.group.rotation.y = Math.atan2(dx, dz);
+  }
+  scene.add(jumpSign.group);
+
   return {
     scene, camera, baymax, emergePatch,
     spawn: SPAWN,
     crawlT: 0,
     walkPhaseRef: { value: 0 },
     touchedHole: false,
+    jumpSign,
+    jumpSignT: 0,
+    jumpSignFallStarted: false,
+    jumpSignAngle: 0,
+    jumpSignAngVel: 0,
   };
 }
 
@@ -8129,6 +8293,9 @@ html { scroll-behavior: smooth; }
 
   const HOLE_BUFFER = 0.05;
   const CRAWL_DURATION = 2.4;
+  // "JUMP IN" sign drops a beat after Baymax fully emerges — gives him time
+  // to be visible on screen before the creak + swing pulls the eye.
+  const JUMP_SIGN_FALL_AT = 1.8;
 
   // ---- white world: intro update ----
   function updateIntro(dt, t) {
@@ -8140,6 +8307,36 @@ html { scroll-behavior: smooth; }
       white.emergePatch.material.opacity = 0.4 * (1 - eased);
     } else {
       white.emergePatch.material.opacity = 0;
+    }
+
+    // "JUMP IN" sign animation: a gentle pre-snap sway, then the left pole
+    // breaks and the panel pendulums down to hang sideways off the right
+    // pole.  Pendulum simulation with damping so it settles naturally.
+    if (white.jumpSign) {
+      white.jumpSignT += dt;
+      if (!white.jumpSignFallStarted) {
+        // Tiny ambient sway before the break — barely perceptible breeze.
+        white.jumpSign.pivot.rotation.z = Math.sin(white.jumpSignT * 1.6) * 0.012;
+        if (white.jumpSignT >= JUMP_SIGN_FALL_AT) {
+          white.jumpSignFallStarted = true;
+          white.jumpSignAngle  = white.jumpSign.pivot.rotation.z;
+          white.jumpSignAngVel = -0.45;            // kick to start the fall
+          // The detached pole leans away a little to sell the snap.
+          white.jumpSign.leftPole.rotation.z = -0.18;
+          white.jumpSign.leftPole.position.y -= 0.04;
+          playCreak();
+        }
+      } else {
+        // Pendulum from a horizontal arm hinged at the right pole's top.
+        const L = white.jumpSign.panelW * 0.5;
+        const G = 11.0;
+        const angFromDown = white.jumpSignAngle + Math.PI / 2;
+        const angAccel = -(G / L) * Math.sin(angFromDown);
+        white.jumpSignAngVel += angAccel * dt;
+        white.jumpSignAngVel *= Math.exp(-1.4 * dt);   // damping
+        white.jumpSignAngle  += white.jumpSignAngVel * dt;
+        white.jumpSign.pivot.rotation.z = white.jumpSignAngle;
+      }
     }
 
     if (white.crawlT >= 1 && !white.touchedHole) {
