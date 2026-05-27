@@ -1681,59 +1681,73 @@ function buildJumpInFaceTexture() {
   return tex;
 }
 
-// Two thin wooden poles with a small "JUMP IN" panel hanging between them.
-// The panel is parented to a pivot at the RIGHT pole's top so the intro
-// animation can drop it sideways once the left pole "breaks".
+// Small "JUMP IN" panel suspended from two thin ropes that run up off the
+// top of the screen.  The panel is parented to a pivot at its top-right
+// corner so that, once the left rope detaches, gravity swings the panel
+// around the surviving (right) rope until it dangles sideways.
 function buildJumpInSign() {
   const group = new THREE.Group();
+
+  const panelW = 0.95, panelH = 0.45, panelD = 0.05;
+  const halfSep = panelW * 0.46;
+  // Panel rest height (centre) in the group's local frame; everything else
+  // is sized off this so swapping the world-space scale stays consistent.
+  const PANEL_CENTER_Y = 1.6;
+  const PANEL_TOP_Y    = PANEL_CENTER_Y + panelH * 0.5;
+  // Ropes terminate well above the camera's view so they appear to come
+  // from somewhere off-screen up top.
+  const CEILING_Y = 10.0;
+  const ropeLen   = CEILING_Y - PANEL_TOP_Y;
+  const ropeMidY  = (CEILING_Y + PANEL_TOP_Y) * 0.5;
+  const ropeR     = 0.024;
+
+  const ropeMat = new THREE.MeshStandardMaterial({
+    color: 0x8e6a3f, roughness: 0.95, metalness: 0.0,
+  });
+
+  const leftRope = new THREE.Mesh(
+    new THREE.CylinderGeometry(ropeR, ropeR, ropeLen, 10),
+    ropeMat
+  );
+  leftRope.position.set(-halfSep, ropeMidY, 0);
+  leftRope.castShadow = true;
+  group.add(leftRope);
+
+  const rightRope = new THREE.Mesh(
+    new THREE.CylinderGeometry(ropeR, ropeR, ropeLen, 10),
+    ropeMat
+  );
+  rightRope.position.set(halfSep, ropeMidY, 0);
+  rightRope.castShadow = true;
+  group.add(rightRope);
+
+  // Pivot at the panel's TOP-RIGHT CORNER (where the right rope meets the
+  // panel).  When the left rope detaches, gravity swings the panel around
+  // this point — the rectangle's centre of mass settles directly below the
+  // pivot, which produces a natural "hanging sideways" final pose.
+  const pivot = new THREE.Group();
+  pivot.position.set(halfSep, PANEL_TOP_Y, 0);
+  group.add(pivot);
 
   const poleCanvas = buildWoodCanvas(256, 256);
   addWeathering(poleCanvas);
   const poleTex = new THREE.CanvasTexture(poleCanvas);
   poleTex.colorSpace = THREE.SRGBColorSpace;
-  const woodMat = new THREE.MeshStandardMaterial({ map: poleTex, roughness: 0.92 });
-
-  const poleH  = 1.9;
-  const poleR  = 0.045;
-  const panelW = 0.95, panelH = 0.45, panelD = 0.05;
-  const halfSep = panelW * 0.46;
-
-  const leftPole = new THREE.Mesh(
-    new THREE.CylinderGeometry(poleR, poleR, poleH, 14),
-    woodMat
-  );
-  leftPole.position.set(-halfSep, poleH / 2, 0);
-  leftPole.castShadow = true;
-  group.add(leftPole);
-
-  const rightPole = new THREE.Mesh(
-    new THREE.CylinderGeometry(poleR, poleR, poleH, 14),
-    woodMat
-  );
-  rightPole.position.set(halfSep, poleH / 2, 0);
-  rightPole.castShadow = true;
-  group.add(rightPole);
-
-  // Pivot sits at the right pole's top — the panel hangs from it.  Once the
-  // left pole detaches, animating `pivot.rotation.z` from 0 → -π/2 swings the
-  // panel down so it dangles vertically off the surviving pole.
-  const pivot = new THREE.Group();
-  pivot.position.set(halfSep, poleH - panelH * 0.5, 0);
-  group.add(pivot);
-
+  const sideMat = new THREE.MeshStandardMaterial({ map: poleTex, roughness: 0.95 });
   const faceTex = buildJumpInFaceTexture();
   const faceMat = new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.8 });
-  const sideMat = new THREE.MeshStandardMaterial({ map: poleTex, roughness: 0.95 });
   const panel = new THREE.Mesh(
     new THREE.BoxGeometry(panelW, panelH, panelD),
     [sideMat, sideMat, sideMat, sideMat, faceMat, sideMat]
   );
-  // Offset panel so the pivot lines up with its right edge.
-  panel.position.set(-panelW * 0.5, 0, 0);
+  // Panel sits below-and-left of the pivot so the pivot lines up with the
+  // panel's top-right corner.
+  panel.position.set(-panelW * 0.5, -panelH * 0.5, 0);
   panel.castShadow = true;
   pivot.add(panel);
 
-  return { group, leftPole, rightPole, pivot, panel, panelW, panelH };
+  return { group, leftRope, rightRope, pivot, panel,
+           panelW, panelH, ropeLen, ropeMidY, halfSep, ceilingY: CEILING_Y };
 }
 
 // ==========================================================================
@@ -2232,9 +2246,9 @@ function buildWhiteWorld() {
   }
   scene.add(sign);
 
-  // "JUMP IN" sign: two thin poles holding a small panel that points at the
-  // hole.  Positioned to the left of the hole so its arrow naturally points
-  // down-and-right toward the rim.
+  // "JUMP IN" sign: a small panel suspended from two thin ropes that run up
+  // off the top of the camera view.  Positioned to the left of the hole so
+  // its arrow naturally points down-and-right toward the rim.
   const jumpSign = buildJumpInSign();
   const jumpAngle = THREE.MathUtils.degToRad(-55);
   const jumpDist  = 2.45;
@@ -4455,623 +4469,123 @@ function buildCorkBoardWithMap(opts = {}) {
   const mcv = document.createElement('canvas');
   mcv.width = mw; mcv.height = mh;
   const mctx = mcv.getContext('2d');
+  // Realistic-board only: a second canvas holding white country borders +
+  // labels.  Painted into asynchronously once the geojson lands.
+  let overlayCanvas = null;
   if (realistic) {
-    // ===== Modern minimalist atlas =====
-    // soft cream background (the "ocean" is left as the bg so the eye reads
-    // the green continents as figure, the ground as ground)
-    mctx.fillStyle = '#eef3f5';
-    mctx.fillRect(0, 0, mw, mh);
-
-    // helper: lon/lat → canvas px (equirectangular over full canvas)
+    // ===== Modern atlas: black land on yellow water, white borders + names =====
+    // Real Natural-Earth 110m country geometry is fetched async; until it
+    // lands the canvas just shows the yellow ocean + the title overlay.
+    const WATER  = '#f0c800';
+    const LAND   = '#000000';
+    const STROKE = '#ffffff';
     function ll(lon, lat) {
       return [(lon + 180) / 360 * mw, (90 - lat) / 180 * mh];
     }
-
-    // faint graticule every 30° (uses ll for consistency)
-    const gScale = mw / 1280;
-    mctx.strokeStyle = 'rgba(40, 60, 80, 0.10)';
-    mctx.lineWidth = 1 * gScale;
-    for (let lon = -150; lon <= 150; lon += 30) {
-      const [x] = ll(lon, 0);
-      mctx.beginPath(); mctx.moveTo(x, 0); mctx.lineTo(x, mh); mctx.stroke();
-    }
-    for (let lat = -60; lat <= 60; lat += 30) {
-      const [, y] = ll(0, lat);
-      mctx.beginPath(); mctx.moveTo(0, y); mctx.lineTo(mw, y); mctx.stroke();
-    }
-    // equator slightly darker
-    mctx.strokeStyle = 'rgba(40, 60, 80, 0.22)';
-    const [, eqY] = ll(0, 0);
-    mctx.beginPath(); mctx.moveTo(0, eqY); mctx.lineTo(mw, eqY); mctx.stroke();
-
-    // helper: draw a closed lon/lat polygon
-    const pScale = mw / 1280;
-    function drawPolygon(latlonPts, fill, stroke) {
-      mctx.beginPath();
-      for (let i = 0; i < latlonPts.length; i++) {
-        const [x, y] = ll(latlonPts[i][0], latlonPts[i][1]);
-        if (i === 0) mctx.moveTo(x, y);
-        else mctx.lineTo(x, y);
-      }
-      mctx.closePath();
-      if (fill) { mctx.fillStyle = fill; mctx.fill(); }
-      if (stroke) {
-        mctx.strokeStyle = stroke;
-        mctx.lineWidth = 1 * pScale;
-        mctx.stroke();
-      }
-    }
-
-    const LAND_FILL   = '#9bbf86';
-    const LAND_STROKE = '#48584a';
-
-    // ===== Continent polygons (lon, lat) =====
-    // Hand-traced from a school-atlas world map.  Each polygon walks the
-    // coastline at roughly 3–8 vertices per major feature; not survey-grade
-    // but the recognisable silhouette of every continent is in here.
-
-    // ---- North America (mainland) ----
-    drawPolygon([
-      // Panama / Caribbean side, walking north
-      [-77.5,  8.5], [-79.7,  9.5], [-82.5, 10.2], [-83.5, 11.0],
-      [-84.0, 12.4], [-83.5, 13.9], [-83.2, 15.0], [-85.0, 16.0],
-      [-86.5, 15.9], [-88.0, 15.9], [-88.7, 17.5], [-88.0, 18.5],
-      [-87.5, 20.3], [-86.7, 21.6], [-89.0, 21.6], [-90.4, 21.0],
-      [-91.5, 19.2], [-94.0, 18.6], [-95.5, 18.7], [-96.5, 19.5],
-      [-97.4, 21.3], [-97.6, 23.8], [-97.4, 25.9], [-97.1, 26.0],
-      // Texas → Louisiana → Mississippi delta
-      [-95.5, 28.7], [-94.6, 29.4], [-93.7, 29.7], [-91.5, 29.5],
-      [-90.0, 29.2], [-89.2, 29.0], [-88.9, 30.4], [-87.5, 30.4],
-      [-85.7, 29.8], [-84.5, 30.0], [-83.4, 29.7], [-82.8, 28.4],
-      // Florida peninsula
-      [-82.6, 27.5], [-81.9, 26.4], [-81.5, 25.4], [-80.9, 25.1],
-      [-80.1, 25.4], [-80.1, 26.5], [-80.4, 27.8], [-80.8, 28.5],
-      [-81.3, 30.5], [-80.9, 32.1], [-79.5, 33.2], [-77.9, 34.2],
-      [-76.5, 34.8], [-75.5, 35.2], [-76.2, 36.9], [-75.1, 38.0],
-      [-74.0, 39.4], [-74.0, 40.5], [-71.9, 41.0], [-71.0, 41.3],
-      [-70.7, 41.6], [-70.0, 41.9], [-69.9, 42.0], [-70.6, 42.5],
-      [-70.7, 43.6], [-70.0, 44.5], [-67.0, 44.7], [-66.0, 45.0],
-      // Bay of Fundy → Nova Scotia
-      [-65.0, 45.5], [-64.5, 46.5], [-63.0, 45.7], [-61.0, 45.5],
-      [-60.0, 46.0], [-60.0, 47.0], [-59.7, 47.7], [-58.0, 47.5],
-      // Newfoundland (treat as mainland for simplicity)
-      [-55.7, 47.6], [-53.0, 46.8], [-52.7, 47.5], [-53.2, 49.0],
-      [-55.5, 51.6], [-56.5, 52.0],
-      // Labrador
-      [-56.0, 53.5], [-58.0, 54.8], [-60.0, 56.5], [-62.0, 58.0],
-      [-63.5, 59.5], [-64.5, 60.4],
-      // Ungava (enter Hudson Strait)
-      [-66.0, 60.0], [-69.0, 60.0], [-71.5, 60.8], [-74.0, 61.6],
-      [-78.0, 62.0], [-78.5, 63.5], [-78.5, 65.0], [-82.0, 66.0],
-      [-86.0, 67.0], [-92.0, 68.0], [-94.0, 68.8], [-98.0, 69.0],
-      [-101.5, 69.5], [-107.0, 69.0], [-114.0, 69.0], [-117.0, 69.6],
-      [-122.0, 70.0], [-129.0, 70.0], [-134.0, 70.2], [-141.0, 70.0],
-      // Alaska north slope
-      [-146.0, 70.5], [-152.0, 70.7], [-156.5, 71.4], [-160.0, 70.8],
-      [-163.0, 70.1], [-166.0, 68.7], [-168.0, 66.0],
-      // Bering Strait region
-      [-166.5, 64.8], [-163.5, 64.5], [-161.0, 63.5], [-162.0, 60.5],
-      [-165.5, 59.7], [-167.0, 58.5], [-163.0, 57.0], [-159.0, 55.7],
-      [-155.5, 56.8], [-152.5, 58.5], [-150.0, 59.5], [-149.0, 60.5],
-      [-147.0, 60.5], [-144.5, 60.0], [-140.5, 59.5], [-137.0, 58.5],
-      [-134.5, 57.0], [-131.5, 55.0], [-130.0, 54.0], [-128.0, 52.5],
-      [-125.5, 50.1], [-124.7, 48.4], [-124.0, 46.0], [-123.9, 42.0],
-      [-122.5, 38.5], [-121.0, 36.5], [-118.5, 34.0], [-117.3, 32.7],
-      // Baja California (no Sea of Cortez — Baja treated as solid)
-      [-115.5, 30.0], [-114.0, 27.0], [-112.5, 24.8], [-110.0, 23.0],
-      // back up Sea of Cortez (east shore) and onto the mainland Mexico coast
-      [-108.5, 25.5], [-110.0, 28.5], [-114.0, 31.5], [-113.5, 32.5],
-      [-111.0, 31.0], [-108.0, 26.0], [-105.5, 21.5], [-103.5, 18.6],
-      [-100.5, 17.2], [-97.5, 16.0], [-94.0, 16.2], [-92.0, 14.7],
-      [-90.5, 14.0], [-89.0, 13.6], [-87.5, 13.2], [-85.5, 11.0],
-      [-83.5,  8.5], [-80.0,  7.6], [-77.5,  8.5]
-    ], LAND_FILL, LAND_STROKE);
-    // Hudson Bay carved out of the mainland
-    drawPolygon([
-      [-94.0, 58.5], [-92.0, 60.5], [-88.0, 62.0], [-82.0, 62.3],
-      [-79.0, 60.5], [-78.5, 58.5], [-79.0, 56.0], [-82.0, 53.0],
-      [-85.0, 51.5], [-88.0, 53.5], [-92.0, 56.5]
-    ], '#eef3f5', null);
-
-    // ---- Greenland ----
-    drawPolygon([
-      [-22.0, 70.0], [-19.5, 73.5], [-19.0, 76.5], [-22.0, 80.0],
-      [-28.0, 82.0], [-37.0, 83.3], [-45.0, 83.0], [-55.0, 82.5],
-      [-60.0, 81.5], [-62.0, 79.0], [-58.0, 76.0], [-55.0, 73.0],
-      [-53.0, 70.0], [-50.0, 67.0], [-49.0, 64.5], [-45.0, 60.0],
-      [-43.0, 59.8], [-41.0, 60.8], [-38.5, 64.0], [-35.0, 65.5],
-      [-28.0, 67.0], [-22.0, 70.0]
-    ], LAND_FILL, LAND_STROKE);
-    // Baffin Island
-    drawPolygon([
-      [-78.0, 70.0], [-72.0, 73.0], [-66.0, 73.5], [-61.0, 71.5],
-      [-63.0, 68.5], [-67.0, 65.0], [-74.0, 65.5], [-78.0, 67.5]
-    ], LAND_FILL, LAND_STROKE);
-    // Ellesmere
-    drawPolygon([
-      [-89.0, 78.0], [-78.0, 80.0], [-68.0, 82.5], [-62.0, 81.5],
-      [-72.0, 77.5], [-82.0, 76.0]
-    ], LAND_FILL, LAND_STROKE);
-    // Iceland
-    drawPolygon([
-      [-22.5, 64.5], [-21.0, 63.5], [-15.5, 63.5], [-14.0, 64.6],
-      [-13.5, 65.8], [-16.0, 66.5], [-20.0, 66.5], [-23.0, 65.7], [-24.0, 64.8]
-    ], LAND_FILL, LAND_STROKE);
-
-    // ---- South America ----
-    drawPolygon([
-      // Caribbean coast, going east
-      [-78.0,  8.0], [-76.0,  8.2], [-74.0,  9.2], [-72.0, 11.7],
-      [-70.5, 12.3], [-69.0, 11.5], [-66.0, 11.0], [-63.0, 10.7],
-      [-61.5, 10.0], [-60.0,  8.5], [-58.0,  7.0], [-54.5,  5.5],
-      [-51.5,  4.0], [-50.0,  1.8], [-48.0, -0.8], [-44.5, -2.5],
-      [-41.5, -3.0], [-38.5, -5.0], [-35.2, -5.5], [-35.0, -7.5],
-      [-37.0, -10.5], [-38.0, -13.0], [-38.8, -16.0], [-39.5, -19.0],
-      [-41.0, -22.0], [-43.0, -23.0], [-45.0, -23.5], [-48.0, -25.5],
-      [-48.5, -28.0], [-51.0, -30.5], [-53.0, -32.5], [-56.5, -34.5],
-      [-58.0, -35.5], [-57.0, -38.0], [-61.0, -39.0], [-62.5, -40.5],
-      [-63.5, -41.5], [-65.0, -42.0], [-65.0, -44.0], [-65.5, -45.5],
-      [-67.5, -47.5], [-69.0, -50.0], [-69.5, -52.5], [-68.5, -54.5],
-      [-66.0, -55.0], [-65.0, -53.5], [-67.0, -50.5], [-72.0, -50.5],
-      [-74.0, -52.0], [-74.5, -50.0], [-73.5, -46.0], [-74.5, -44.0],
-      [-73.0, -41.5], [-73.5, -39.5], [-73.5, -37.0], [-72.0, -35.0],
-      [-71.5, -33.5], [-71.5, -30.0], [-71.0, -25.0], [-70.5, -20.0],
-      [-71.0, -17.0], [-75.5, -16.0], [-77.5, -13.0], [-79.5, -10.0],
-      [-81.0,  -7.0], [-80.7,  -4.5], [-80.0,  -2.5], [-79.8,  -0.5],
-      [-78.5,   1.5], [-77.5,   4.0], [-77.0,   6.0], [-78.0,   8.0]
-    ], LAND_FILL, LAND_STROKE);
-
-    // ---- Africa ----
-    drawPolygon([
-      // North coast (Mediterranean): Gibraltar → Egypt
-      [-5.5, 35.8], [-2.0, 35.2], [ 1.0, 36.5], [ 6.5, 36.8],
-      [10.0, 37.3], [11.0, 36.8], [11.5, 33.5], [15.5, 31.5],
-      [20.0, 31.0], [23.0, 32.0], [26.5, 31.5], [29.5, 31.3],
-      [32.0, 31.4], [33.5, 31.0],
-      // Sinai → Red Sea
-      [34.3, 28.0], [35.5, 24.0], [37.0, 22.0], [39.0, 19.5],
-      [40.5, 17.0], [42.5, 15.0], [43.5, 12.7],
-      // Horn of Africa
-      [44.0, 11.5], [47.0, 11.0], [49.0, 11.5], [51.4, 11.8],
-      [50.5,  9.5], [49.0,  6.0], [47.5,  3.5], [44.5,  0.5],
-      [42.0, -3.0], [40.5, -6.0], [39.5, -8.0], [40.5, -12.0],
-      [40.8, -16.0], [37.5, -18.0], [35.0, -22.0], [33.0, -26.0],
-      [31.5, -29.0], [29.5, -31.5], [27.0, -33.5], [22.5, -34.0],
-      [18.5, -34.5], [17.5, -32.0], [14.5, -27.0], [13.0, -22.0],
-      [12.5, -17.5], [13.5, -12.5], [13.5,  -8.0], [12.0,  -5.5],
-      [10.0,  -2.5], [ 9.0,   0.5], [ 9.5,   3.5], [ 8.5,   4.5],
-      [ 6.0,   4.5], [ 3.5,   6.5], [ 1.5,   6.2], [-1.0,   5.0],
-      [-3.0,   5.0], [-5.5,   4.5], [-7.5,   4.5], [-9.0,   5.5],
-      [-11.5,  6.5], [-13.5,  8.5], [-14.5, 11.0], [-16.5, 12.5],
-      [-17.0, 14.5], [-16.5, 17.0], [-16.0, 20.0], [-13.0, 21.0],
-      [-10.0, 26.0], [ -8.5, 28.0], [ -5.0, 30.0], [ -2.0, 32.5],
-      [-1.5, 35.0], [-5.5, 35.8]
-    ], LAND_FILL, LAND_STROKE);
-    // Madagascar
-    drawPolygon([
-      [49.5, -12.0], [50.2, -15.0], [50.0, -19.0], [47.0, -25.0],
-      [44.5, -25.5], [43.5, -22.0], [43.2, -17.0], [44.0, -13.0],
-      [46.0, -12.0]
-    ], LAND_FILL, LAND_STROKE);
-
-    // ---- EURASIA (Europe + Asia + the Middle East as one mass) ----
-    drawPolygon([
-      // Iberia — Gibraltar → west coast → north coast (Bay of Biscay)
-      [-5.4, 35.9], [-6.3, 36.2], [-7.4, 37.0], [-9.0, 37.0],
-      [-9.5, 38.7], [-9.5, 41.5], [-9.2, 43.0], [-7.7, 43.8],
-      [-3.8, 43.5], [-1.7, 43.4],
-      // South France → Bay of Biscay
-      [-1.4, 44.5], [-1.1, 45.6], [-1.2, 46.5], [-2.2, 47.3],
-      [-3.5, 47.8], [-4.7, 48.4],
-      // Brittany north → Channel
-      [-3.7, 48.7], [-2.0, 48.8], [-1.4, 49.2], [-1.3, 49.7],
-      [ 0.2, 49.6], [ 1.6, 50.9],
-      // Belgium / Netherlands / North Germany
-      [ 2.5, 51.1], [ 3.4, 51.5], [ 4.2, 51.9], [ 4.5, 52.5],
-      [ 5.3, 53.0], [ 6.7, 53.5], [ 7.5, 53.7], [ 8.3, 53.9],
-      // Denmark (Jutland)
-      [ 8.4, 54.6], [ 8.1, 55.5], [ 8.3, 56.5], [ 9.0, 57.2],
-      [10.5, 57.7], [10.7, 56.7], [10.5, 56.0],
-      // Baltic — Skagerrak south coast → Germany → Poland → Baltic States
-      [12.5, 54.5], [14.0, 54.0], [16.0, 54.4], [18.5, 54.5],
-      [19.5, 54.5], [20.0, 55.2], [21.0, 55.5], [21.0, 56.5],
-      [21.3, 57.6], [23.0, 58.0], [24.0, 58.0], [24.5, 58.5],
-      [27.5, 58.5], [26.0, 59.5], [28.5, 60.5], [30.3, 60.0],
-      // Russia north — Karelia → Murmansk → Arctic
-      [29.0, 62.0], [30.5, 64.0], [29.5, 66.0], [29.5, 68.0],
-      [32.0, 69.5], [33.5, 69.5], [36.0, 67.5], [40.0, 66.0],
-      [44.0, 67.0], [44.0, 69.0], [50.0, 68.5], [55.0, 70.0],
-      [60.0, 72.5], [66.0, 71.5], [69.0, 73.5], [76.0, 73.0],
-      [85.0, 74.5], [95.0, 77.5], [105.0, 78.0], [110.0, 76.5],
-      [115.0, 74.0], [120.0, 73.0], [128.0, 73.5], [135.0, 72.0],
-      [142.0, 72.0], [148.0, 71.5], [155.0, 71.5], [160.0, 69.5],
-      [170.0, 69.5], [180.0, 68.0],
-      // Bering Strait (Asia side) → Kamchatka → Russian Far East coast
-      [180.0, 64.5], [175.0, 64.0], [172.0, 60.5], [166.0, 60.0],
-      [163.0, 59.5], [163.0, 56.0], [158.0, 53.0], [156.0, 51.5],
-      [158.0, 51.5], [161.0, 55.5], [161.0, 58.5], [156.0, 57.0],
-      [155.0, 50.5], [142.0, 48.5], [140.5, 46.5], [141.0, 44.0],
-      [137.5, 42.5], [132.5, 42.8], [131.0, 41.5],
-      // Korean peninsula
-      [130.0, 38.5], [129.5, 36.5], [128.7, 35.0], [126.5, 34.5],
-      [126.5, 36.5], [126.0, 38.0],
-      // Yellow Sea → China east coast
-      [124.0, 39.5], [121.5, 39.0], [119.5, 39.0], [117.5, 38.0],
-      [120.5, 36.5], [121.5, 33.0], [120.0, 32.0], [121.8, 30.5],
-      [121.0, 28.5], [119.5, 25.0], [116.5, 23.5], [114.0, 22.5],
-      [113.0, 21.5], [110.5, 21.0], [109.5, 18.5], [108.5, 16.5],
-      // Vietnam
-      [109.5, 12.5], [109.0, 10.5], [105.0, 10.0], [103.0, 11.0],
-      // Thailand peninsula → Malaysia tip
-      [101.0, 13.0], [99.5, 12.5], [100.0,  9.5], [101.5,  6.0],
-      [103.5,  3.0], [104.0,  1.3],
-      // back up Bay of Bengal (Myanmar coast)
-      [100.5,  2.0], [ 98.5,  6.5], [ 97.0, 10.5], [ 95.5, 15.5],
-      [ 94.0, 18.0], [ 93.0, 21.0], [ 90.5, 22.5],
-      // Bangladesh → east coast of India
-      [ 88.0, 22.0], [ 86.5, 21.0], [ 83.5, 18.0], [ 81.5, 15.0],
-      [ 80.5, 12.5], [ 79.0,  9.5], [ 77.5,  8.2],
-      // West coast India → Pakistan
-      [ 75.0,  9.0], [ 73.0, 16.0], [ 72.0, 19.5], [ 69.5, 22.5],
-      [ 67.0, 24.0], [ 63.0, 25.0], [ 59.5, 25.0],
-      // Iran → Persian Gulf
-      [ 56.5, 26.5], [ 54.0, 26.7], [ 51.5, 27.5], [ 49.0, 30.0],
-      [ 48.0, 30.5], [ 48.5, 29.0],
-      // Arabian peninsula east + south
-      [ 50.5, 27.0], [ 52.0, 25.0], [ 54.5, 24.5], [ 56.5, 24.0],
-      [ 56.0, 22.5], [ 55.0, 20.0], [ 52.5, 19.0], [ 53.5, 16.5],
-      [ 50.5, 15.0], [ 48.0, 14.0], [ 45.0, 12.7], [ 43.5, 12.7],
-      // Red Sea (east shore) → Sinai
-      [ 43.5, 16.5], [ 42.5, 19.0], [ 41.0, 21.0], [ 39.0, 22.0],
-      [ 37.0, 25.0], [ 35.5, 27.0], [ 34.6, 28.0], [ 34.3, 31.5],
-      // Levant → Turkey south → Aegean
-      [ 35.0, 33.0], [ 35.5, 35.0], [ 36.5, 36.5], [ 35.5, 36.8],
-      [ 32.0, 36.5], [ 30.0, 36.8], [ 28.5, 37.0], [ 27.0, 37.5],
-      [ 26.5, 38.5], [ 27.0, 40.5], [ 28.5, 41.0], [ 29.5, 41.5],
-      // Black Sea → Crimea
-      [ 31.5, 41.5], [ 35.0, 42.0], [ 39.5, 41.5], [ 41.5, 42.5],
-      [ 40.5, 43.5], [ 38.0, 45.0], [ 36.5, 45.5], [ 33.5, 45.0],
-      [ 32.5, 46.5], [ 31.0, 46.5], [ 30.0, 46.0],
-      // Balkans → Adriatic → Italy boot intentionally drawn as a separate polygon
-      [ 28.5, 41.5], [ 26.0, 40.0], [ 23.5, 40.5], [ 22.5, 40.0],
-      [ 23.0, 38.0], [ 21.5, 38.5], [ 19.5, 40.0], [ 18.5, 41.5],
-      [ 16.5, 42.5], [ 15.0, 44.0], [ 13.5, 45.5],
-      // France south Mediterranean → Iberia east coast → back to Gibraltar
-      [ 12.5, 45.7], [  8.5, 44.5], [  5.0, 43.5], [  3.0, 43.0],
-      [  0.5, 42.5], [ -1.0, 41.0], [ -0.5, 39.0], [ -0.5, 37.5],
-      [ -2.0, 36.7], [ -5.4, 35.9]
-    ], LAND_FILL, LAND_STROKE);
-
-    // ---- Standalone European islands & peninsulas (drawn over Eurasia) ----
-    // Great Britain
-    drawPolygon([
-      [-3.0, 50.7], [-1.5, 50.7], [ 0.0, 50.8], [ 1.5, 51.4],
-      [ 1.0, 52.6], [ 1.6, 52.9], [ 0.0, 53.5], [-0.5, 54.6],
-      [-1.2, 55.0], [-1.5, 55.6], [-2.0, 56.5], [-3.0, 57.5],
-      [-3.5, 58.5], [-5.0, 58.7], [-5.7, 57.5], [-6.0, 56.0],
-      [-5.0, 55.0], [-5.0, 54.4], [-4.5, 53.4], [-3.0, 53.4],
-      [-4.5, 51.7], [-5.5, 50.2], [-4.0, 50.2]
-    ], LAND_FILL, LAND_STROKE);
-    // Ireland
-    drawPolygon([
-      [-10.5, 51.5], [ -8.0, 51.5], [ -6.0, 52.2], [ -6.0, 53.2],
-      [ -6.5, 54.5], [ -8.5, 55.3], [-10.2, 54.6], [-10.5, 53.5],
-      [-10.0, 52.5]
-    ], LAND_FILL, LAND_STROKE);
-    // Italian peninsula (boot) — drawn over Eurasia
-    drawPolygon([
-      [ 7.5, 44.0], [ 8.8, 44.4], [10.0, 44.0], [12.5, 44.0],
-      [13.8, 43.0], [14.0, 42.0], [14.5, 41.5], [15.0, 40.0],
-      [17.5, 40.5], [18.5, 40.0], [17.0, 39.0], [16.0, 37.9],
-      [15.7, 38.2], [15.6, 39.9], [14.0, 40.6], [13.0, 41.0],
-      [11.5, 42.5], [10.0, 43.5], [ 8.5, 43.5]
-    ], LAND_FILL, LAND_STROKE);
-    // Sicily
-    drawPolygon([
-      [12.5, 37.8], [15.6, 38.3], [15.3, 37.1], [12.6, 37.5]
-    ], LAND_FILL, LAND_STROKE);
-    // Sardinia + Corsica (drawn as two polygons separated by a strait)
-    drawPolygon([
-      [8.5, 41.0], [9.7, 41.2], [9.7, 39.0], [8.5, 39.0]
-    ], LAND_FILL, LAND_STROKE);
-    drawPolygon([
-      [8.7, 41.5], [9.5, 41.5], [9.5, 43.0], [8.6, 42.7]
-    ], LAND_FILL, LAND_STROKE);
-    // Crete
-    drawPolygon([
-      [23.5, 35.3], [26.5, 35.5], [26.0, 35.0], [23.7, 34.9]
-    ], LAND_FILL, LAND_STROKE);
-    // Cyprus
-    drawPolygon([
-      [32.3, 34.6], [34.6, 35.7], [33.5, 35.4], [32.4, 35.0]
-    ], LAND_FILL, LAND_STROKE);
-    // ---- Danish islands (Zealand, Funen, Lolland, Bornholm) ----
-    // Without these, the Copenhagen pin (12.57°E, 55.68°N) would land in
-    // open Baltic water — these polygons put it on Zealand where it belongs.
-    drawPolygon([   // Funen
-      [10.0, 55.5], [10.95, 55.55], [10.85, 55.20], [10.40, 54.95],
-      [ 9.85, 55.10], [ 9.95, 55.40]
-    ], LAND_FILL, LAND_STROKE);
-    drawPolygon([   // Zealand  (Copenhagen is in the NE of this one)
-      [11.10, 55.95], [11.40, 56.10], [12.55, 56.10], [12.65, 55.85],
-      [12.65, 55.55], [12.10, 55.25], [11.30, 55.20], [11.05, 55.50]
-    ], LAND_FILL, LAND_STROKE);
-    drawPolygon([   // Lolland + Falster (lumped)
-      [11.00, 54.95], [12.30, 54.95], [12.50, 54.70], [11.20, 54.65]
-    ], LAND_FILL, LAND_STROKE);
-    drawPolygon([   // Bornholm
-      [14.70, 55.30], [15.15, 55.30], [15.15, 55.00], [14.70, 55.00]
-    ], LAND_FILL, LAND_STROKE);
-    // ---- Gotland (Sweden) ----
-    drawPolygon([
-      [18.25, 57.95], [19.10, 57.90], [19.30, 57.45], [18.80, 56.95], [18.10, 57.40]
-    ], LAND_FILL, LAND_STROKE);
-    // ---- Balearic Islands (Spain) ----
-    drawPolygon([   // Mallorca
-      [2.40, 39.92], [3.45, 39.85], [3.50, 39.40], [2.40, 39.30]
-    ], LAND_FILL, LAND_STROKE);
-    drawPolygon([   // Ibiza
-      [1.20, 39.10], [1.60, 39.10], [1.60, 38.80], [1.20, 38.80]
-    ], LAND_FILL, LAND_STROKE);
-
-    // ---- Asian standalone landforms ----
-    // Sri Lanka
-    drawPolygon([
-      [79.6,  8.9], [81.7,  8.8], [82.0,  6.7], [80.4,  5.9]
-    ], LAND_FILL, LAND_STROKE);
-    // Japan — Hokkaido + Honshu + Shikoku + Kyushu, rough single outline
-    // Hokkaido
-    drawPolygon([
-      [140.0, 41.6], [141.5, 41.7], [144.5, 42.5], [145.5, 44.0],
-      [144.0, 45.5], [142.0, 45.5], [140.5, 44.5], [140.0, 42.5]
-    ], LAND_FILL, LAND_STROKE);
-    // Honshu
-    drawPolygon([
-      [141.5, 41.4], [141.6, 39.5], [140.5, 38.0], [141.5, 36.5],
-      [141.0, 35.5], [139.5, 34.6], [138.5, 34.5], [137.0, 34.8],
-      [136.5, 34.5], [135.5, 33.5], [133.5, 33.7], [132.5, 33.5],
-      [131.0, 34.5], [130.8, 34.5], [131.2, 35.5], [132.5, 35.5],
-      [134.0, 35.7], [135.8, 35.7], [136.5, 37.5], [138.5, 37.5],
-      [139.5, 38.5], [140.5, 39.8], [141.0, 41.4]
-    ], LAND_FILL, LAND_STROKE);
-    // Shikoku
-    drawPolygon([
-      [132.5, 33.5], [134.7, 34.4], [134.5, 33.5], [132.8, 32.8]
-    ], LAND_FILL, LAND_STROKE);
-    // Kyushu
-    drawPolygon([
-      [129.5, 32.5], [131.5, 32.0], [131.8, 31.0], [130.7, 31.0],
-      [130.0, 31.5], [129.8, 33.0]
-    ], LAND_FILL, LAND_STROKE);
-    // Taiwan
-    drawPolygon([
-      [120.0, 22.0], [121.0, 22.5], [121.8, 24.5], [121.5, 25.2],
-      [120.6, 24.5], [120.2, 23.0]
-    ], LAND_FILL, LAND_STROKE);
-    // Hainan
-    drawPolygon([
-      [108.5, 18.5], [110.5, 18.5], [111.0, 20.0], [109.0, 20.0]
-    ], LAND_FILL, LAND_STROKE);
-    // Sakhalin
-    drawPolygon([
-      [141.5, 46.0], [143.5, 47.0], [144.5, 51.0], [142.0, 53.5],
-      [141.5, 53.0], [142.0, 50.0], [141.0, 47.0]
-    ], LAND_FILL, LAND_STROKE);
-
-    // ---- SE Asian archipelago ----
-    // Sumatra
-    drawPolygon([
-      [95.3,  5.5], [98.5,  3.5], [101.5,  1.0], [103.5, -1.0],
-      [105.5, -3.0], [106.0, -6.0], [102.0, -4.5], [ 99.5, -1.5],
-      [ 96.0,  2.5]
-    ], LAND_FILL, LAND_STROKE);
-    // Java
-    drawPolygon([
-      [105.5, -6.0], [109.5, -6.5], [114.0, -7.5], [114.5, -8.5],
-      [110.0, -8.5], [106.0, -7.0]
-    ], LAND_FILL, LAND_STROKE);
-    // Borneo
-    drawPolygon([
-      [109.0,  2.0], [113.0,  4.5], [117.5,  4.5], [119.0,  2.5],
-      [118.5,  0.5], [117.5, -1.5], [114.5, -3.5], [112.5, -3.0],
-      [110.0, -1.0], [108.5,  1.0]
-    ], LAND_FILL, LAND_STROKE);
-    // Sulawesi
-    drawPolygon([
-      [119.0,  1.0], [121.0,  1.5], [122.5,  0.5], [124.5,  1.5],
-      [125.0, -1.0], [122.5, -3.0], [121.5, -5.5], [120.0, -3.5],
-      [119.0, -2.0]
-    ], LAND_FILL, LAND_STROKE);
-    // Lesser Sundas (Bali → Timor strip)
-    drawPolygon([
-      [115.0, -8.5], [125.0, -8.5], [127.5, -9.5], [122.0, -10.0],
-      [117.0, -9.0]
-    ], LAND_FILL, LAND_STROKE);
-    // Halmahera
-    drawPolygon([
-      [127.5,  1.5], [129.0,  1.0], [128.7, -1.0], [127.8, -0.5]
-    ], LAND_FILL, LAND_STROKE);
-    // New Guinea
-    drawPolygon([
-      [131.0, -1.0], [134.0, -1.5], [138.0, -2.0], [141.0, -2.6],
-      [145.0, -4.0], [148.0, -5.5], [150.5, -6.5], [150.5, -9.0],
-      [147.0, -10.0], [143.0, -9.5], [140.0, -8.0], [136.5, -7.5],
-      [133.0, -6.5], [131.5, -4.5]
-    ], LAND_FILL, LAND_STROKE);
-    // Philippines (Luzon + Mindanao approximated)
-    drawPolygon([
-      [120.0, 13.0], [121.5, 13.5], [122.0, 17.0], [121.5, 18.5],
-      [120.0, 18.5], [119.7, 16.0], [120.0, 14.0]
-    ], LAND_FILL, LAND_STROKE);
-    drawPolygon([
-      [122.0,  7.0], [126.5,  7.0], [126.0,  9.5], [123.5, 10.0],
-      [121.5,  8.0]
-    ], LAND_FILL, LAND_STROKE);
-
-    // ---- Australia + Tasmania + NZ ----
-    drawPolygon([
-      [142.5, -10.5], [143.5, -12.0], [144.5, -14.0], [145.5, -14.5],
-      [146.5, -19.0], [149.0, -21.5], [153.5, -25.5], [153.5, -28.5],
-      [152.0, -32.0], [150.5, -35.0], [148.5, -37.5], [146.5, -38.5],
-      [143.5, -38.5], [141.5, -38.0], [140.0, -37.5], [139.5, -35.5],
-      [137.5, -35.5], [136.5, -35.0], [137.5, -32.5], [135.5, -34.5],
-      [131.0, -32.0], [128.0, -32.5], [124.0, -33.5], [117.0, -35.0],
-      [115.0, -33.5], [114.0, -27.0], [113.5, -22.0], [121.0, -19.5],
-      [122.5, -17.0], [125.5, -14.0], [129.5, -14.5], [130.5, -12.5],
-      [132.5, -11.0], [135.0, -12.0], [137.5, -16.5], [139.5, -17.5],
-      [141.5, -13.5], [142.5, -10.5]
-    ], LAND_FILL, LAND_STROKE);
-    // Tasmania
-    drawPolygon([
-      [144.5, -40.5], [148.5, -40.6], [148.5, -43.5], [145.0, -43.5]
-    ], LAND_FILL, LAND_STROKE);
-    // New Zealand — North
-    drawPolygon([
-      [172.5, -41.0], [173.5, -40.5], [174.5, -36.5], [173.0, -34.5],
-      [174.5, -36.5], [176.5, -38.5], [177.5, -37.5], [175.5, -41.5]
-    ], LAND_FILL, LAND_STROKE);
-    // New Zealand — South
-    drawPolygon([
-      [166.5, -45.5], [170.5, -41.0], [172.5, -43.5], [171.0, -46.5]
-    ], LAND_FILL, LAND_STROKE);
-
-    // ---- Antarctica strip ----
-    drawPolygon([
-      [-180, -65], [-150, -73], [-120, -75], [-90, -73], [-60, -75],
-      [-30, -70], [  0, -68], [ 30, -69], [ 60, -67], [ 90, -65],
-      [120, -65], [150, -71], [180, -73],
-      [180, -90], [-180, -90]
-    ], LAND_FILL, LAND_STROKE);
-
-    // ---- Inland water accents ----
-    // Caspian Sea
-    drawPolygon([
-      [47.0, 47.0], [50.0, 47.0], [53.0, 45.5], [54.0, 43.0],
-      [53.0, 40.5], [50.5, 38.5], [49.5, 37.5], [48.5, 39.5],
-      [47.5, 42.5], [47.0, 45.5]
-    ], '#cfdde5', '#7a8d9b');
-    // Black Sea (carve)
-    drawPolygon([
-      [27.5, 41.5], [37.5, 42.0], [41.0, 43.5], [40.0, 45.5],
-      [37.0, 47.0], [33.0, 46.0], [30.5, 46.0], [28.0, 43.5]
-    ], '#cfdde5', '#7a8d9b');
-    // Great Lakes blob (Superior → Erie/Ontario)
-    drawPolygon([
-      [-92.0, 47.5], [-87.0, 48.5], [-82.0, 48.5], [-77.0, 46.5],
-      [-79.0, 43.0], [-83.0, 41.5], [-87.5, 41.5], [-89.5, 43.0],
-      [-91.5, 45.5]
-    ], '#cfdde5', '#7a8d9b');
-
-    // ===== Country borders (drawn on top of the continents, as thin lines) =====
-    // Each border is an open polyline in [lon, lat] points.
-    const BORDER_STROKE = 'rgba(30, 45, 55, 0.55)';
-    function drawBorder(pts) {
-      mctx.beginPath();
-      for (let i = 0; i < pts.length; i++) {
-        const [x, y] = ll(pts[i][0], pts[i][1]);
-        if (i === 0) mctx.moveTo(x, y);
-        else         mctx.lineTo(x, y);
-      }
-      mctx.strokeStyle = BORDER_STROKE;
-      mctx.lineWidth = 1.5 * (mw / 1280);
-      mctx.stroke();
-    }
-    // ---- Europe ----
-    drawBorder([[-9.2, 41.9],[-7.5, 41.7],[-7.2, 40.0],[-7.3, 38.5],[-7.5, 37.2]]); // Spain/Portugal
-    drawBorder([[-1.7, 43.3],[-0.5, 42.9],[0.5, 42.7],[1.4, 42.6],[2.8, 42.5],[3.1, 42.4]]); // Spain/France (Pyrenees)
-    drawBorder([[2.5, 51.1],[2.6, 50.6],[4.2, 50.3],[6.2, 50.1],[6.4, 49.5]]);              // France/Belgium/Lux
-    drawBorder([[6.4, 49.5],[7.6, 49.0],[8.2, 49.0],[7.8, 48.0],[7.6, 47.6]]);              // France/Germany
-    drawBorder([[7.6, 47.6],[10.5, 47.5],[12.2, 47.4],[13.8, 46.5],[16.0, 46.7]]);          // Switzerland/Austria
-    drawBorder([[7.5, 44.0],[7.3, 45.0],[7.1, 45.9],[7.6, 46.0]]);                          // France/Italy
-    drawBorder([[13.8, 46.5],[13.6, 45.7],[12.5, 45.5]]);                                    // Italy/Slovenia/Austria
-    drawBorder([[14.6, 54.0],[14.2, 53.2],[14.4, 52.3],[14.7, 51.4],[15.2, 50.7]]);          // Germany/Poland (Oder)
-    drawBorder([[15.0, 51.0],[13.2, 50.7],[12.4, 50.0],[12.0, 49.4],[13.1, 48.9]]);          // Czech borders (rough)
-    drawBorder([[18.5, 49.4],[19.4, 49.3],[20.5, 49.4],[22.0, 49.0],[23.0, 48.5]]);          // Slovakia/Poland/Ukraine north
-    drawBorder([[20.5, 56.0],[22.0, 55.5],[23.5, 55.0],[26.0, 55.0]]);                       // Lithuania/Latvia top
-    drawBorder([[24.0, 58.0],[27.5, 58.5],[28.0, 59.5]]);                                    // Estonia
-    drawBorder([[ 5.7, 58.5],[ 7.5, 60.0],[10.5, 60.5],[12.0, 61.0],[13.2, 62.5],[15.0, 64.5],[17.5, 65.5],[20.0, 68.0],[23.0, 68.7]]); // Sweden/Norway
-    drawBorder([[23.0, 68.7],[24.0, 67.0],[24.2, 65.5],[22.5, 64.0],[21.0, 63.0]]);          // Sweden/Finland (Tornio)
-    drawBorder([[12.5, 49.6],[13.5, 47.6]]);                                                  // Germany/Czech short
-    drawBorder([[28.5, 41.0],[27.0, 42.0],[25.0, 43.5],[22.5, 44.5],[19.5, 45.0],[19.0, 46.0]]); // Balkans
-    drawBorder([[19.5, 41.5],[20.0, 40.5],[20.5, 39.8],[20.8, 39.5]]);                       // Albania/Greece
-    drawBorder([[26.5, 41.6],[26.0, 40.5],[28.0, 40.0]]);                                    // Turkey/Greece
-    // ---- North America ----
-    drawBorder([[-95.0, 49.0],[-110.0, 49.0],[-123.0, 49.0]]);                                // Canada/US
-    drawBorder([[-141.0, 60.0],[-141.0, 70.0]]);                                              // Canada/Alaska
-    drawBorder([[-97.5, 25.9],[-100.0, 28.5],[-104.0, 30.5],[-106.5, 31.7],[-109.0, 31.3],[-114.7, 32.6]]); // US/Mexico
-    drawBorder([[-92.0, 14.5],[-90.0, 13.9],[-89.4, 14.0]]);                                  // Guatemala/Mexico
-    drawBorder([[-83.0, 8.5],[-79.0, 8.5]]);                                                  // Panama/Colombia
-    // ---- South America ----
-    drawBorder([[-70.0, -33.0],[-69.8, -22.0],[-69.6, -17.5],[-68.5, -16.3]]);                // Chile/Bolivia/Argentina rough
-    drawBorder([[-58.0, -27.5],[-54.5, -25.0],[-53.5, -27.5]]);                               // Argentina/Brazil/Paraguay rough
-    // ---- Africa ----
-    drawBorder([[ 9.5, 28.0],[ 9.2, 32.0],[11.5, 33.0]]);                                     // Algeria/Tunisia/Libya
-    drawBorder([[ 25.0, 22.0],[25.0, 31.5]]);                                                  // Egypt/Libya
-    drawBorder([[ 33.5, 22.0],[34.5, 12.0]]);                                                  // Sudan/Egypt → Red Sea
-    drawBorder([[ 13.0, -12.0],[20.0, -18.0],[25.0, -17.5]]);                                  // Angola/Zambia/Namibia rough
-    drawBorder([[ 16.5, -28.5],[19.0, -28.5],[25.0, -27.0],[29.0, -25.0],[31.5, -26.0]]);     // South Africa/Botswana/Namibia
-    // ---- Asia ----
-    drawBorder([[ 73.0, 19.5],[ 75.0, 25.0],[ 76.0, 32.0],[ 80.0, 32.0]]);                    // India/Pakistan + China rough
-    drawBorder([[ 88.0, 27.0],[ 94.0, 28.0],[ 97.0, 28.5],[ 97.5, 27.5]]);                    // India/China NE
-    drawBorder([[ 78.0, 35.0],[ 80.0, 40.0],[ 88.0, 49.0],[107.0, 49.0],[127.0, 50.0],[135.0, 48.0]]); // China/Mongolia/Russia
-    drawBorder([[124.0, 39.5],[126.0, 38.0],[128.0, 38.0]]);                                  // North/South Korea (DMZ)
-    drawBorder([[100.5, 21.5],[103.5, 22.5],[105.5, 23.5],[108.0, 22.0]]);                    // Laos/Vietnam/China
-    drawBorder([[ 48.0, 29.0],[ 47.5, 31.0],[ 46.0, 35.0],[ 44.5, 37.0],[42.5, 37.3]]);       // Iraq/Saudi/Iran/Syria
-    drawBorder([[ 35.5, 31.5],[36.5, 33.0],[36.0, 35.5]]);                                    // Israel/Jordan/Syria
-
-    // ===== Region labels — sized so they read clearly on the high-res canvas
-    const lScale = mw / 1280;
-    mctx.font = `italic ${Math.round(24 * lScale)}px "Inter", system-ui, sans-serif`;
-    mctx.fillStyle = 'rgba(34, 48, 58, 0.55)';
-    mctx.textAlign = 'center';
-    function labelAt(lon, lat, text) {
-      const [x, y] = ll(lon, lat);
-      mctx.fillText(text, x, y);
-    }
-    labelAt(-100, 40, 'NORTH AMERICA');
-    labelAt(-60, -15, 'SOUTH AMERICA');
-    labelAt( 20,   5, 'AFRICA');
-    labelAt( 90,  45, 'ASIA');
-    labelAt( 10,  50, 'EUROPE');
-    labelAt(135, -25, 'AUSTRALIA');
-    // smaller country labels
-    mctx.font = `600 ${Math.round(14 * lScale)}px "Inter", system-ui, sans-serif`;
-    mctx.fillStyle = 'rgba(34, 48, 58, 0.65)';
-    labelAt( 10, 55,    'Denmark');
-    labelAt( 15, 60,    'Sweden');
-    labelAt(  8, 62,    'Norway');
-    labelAt( 25, 64,    'Finland');
-    labelAt(  9, 52,    'Germany');
-    labelAt(  2, 46,    'France');
-    labelAt( -3, 40,    'Spain');
-    labelAt( 12, 42,    'Italy');
-    labelAt( -2, 53,    'UK');
-    labelAt( -8, 53,    'Ireland');
-    labelAt(  6, 47,    'Switz.');
-    labelAt( 20, 47,    'Hungary');
-    labelAt( 19, 52,    'Poland');
-    labelAt( 30, 50,    'Ukraine');
-    labelAt( 60, 60,    'Russia');
-    labelAt( 78, 22,    'India');
-    labelAt(105, 35,    'China');
-    labelAt(137, 36,    'Japan');
-    labelAt(127, 37,    'Korea');
-    labelAt( 47, 25,    'Saudi A.');
-    labelAt(-100, 23,   'Mexico');
-    labelAt(-100, 45,   'USA');
-    labelAt(-110, 55,   'Canada');
-
-    // ===== Title — single-line, modern minimalist =====
-    // Higher-res canvas → scale fonts up to match
+    // Base layer: solid water.
+    mctx.fillStyle = WATER;
+    mctx.fillRect(0, 0, mw, mh);
+    // Title in dark text so it sits comfortably on the yellow water; redrawn
+    // after the land lands so it never gets covered.
     const tScale = mw / 1280;
-    mctx.fillStyle = '#1b2a32';
-    mctx.font = `600 ${Math.round(38 * tScale)}px "Inter", system-ui, sans-serif`;
-    mctx.textAlign = 'left';
-    mctx.fillText('Biotech world', 40 * tScale, 54 * tScale);
-    mctx.font = `300 ${Math.round(13 * tScale)}px "Inter", system-ui, sans-serif`;
-    mctx.fillStyle = '#7a8a90';
-    mctx.textAlign = 'right';
-    mctx.fillText('hover a pin to read the city — click to see the company', mw - 40 * tScale, mh - 24 * tScale);
+    function drawTitle(ctx) {
+      ctx.fillStyle = '#101010';
+      ctx.font = `600 ${Math.round(38 * tScale)}px "Inter", system-ui, sans-serif`;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText('Biotech world', 40 * tScale, 54 * tScale);
+      ctx.font = `300 ${Math.round(13 * tScale)}px "Inter", system-ui, sans-serif`;
+      ctx.fillStyle = '#404040'; ctx.textAlign = 'right';
+      ctx.fillText('hover a pin to read the city — click to see the company',
+                   mw - 40 * tScale, mh - 24 * tScale);
+    }
+    drawTitle(mctx);
+    // Overlay canvas: borders + country names in white, drawn into the
+    // alpha-blended `overlayCanvas` and exposed to the caller below.  Stays
+    // empty (fully transparent) until the geojson finishes loading.
+    overlayCanvas = document.createElement('canvas');
+    overlayCanvas.width = mw; overlayCanvas.height = mh;
+    const octx = overlayCanvas.getContext('2d');
+    function pathRing(ctx, ring) {
+      ctx.beginPath();
+      for (let i = 0; i < ring.length; i++) {
+        const [x, y] = ll(ring[i][0], ring[i][1]);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+    }
+    function forRings(geom, fn) {
+      if (!geom) return;
+      if (geom.type === 'Polygon') {
+        if (geom.coordinates[0]) fn(geom.coordinates[0]);
+      } else if (geom.type === 'MultiPolygon') {
+        for (const poly of geom.coordinates) if (poly[0]) fn(poly[0]);
+      }
+    }
+    function centroidLL(geom) {
+      let sx = 0, sy = 0, n = 0;
+      const process = (ring) => { for (const [lon, lat] of ring) { sx += lon; sy += lat; n++; } };
+      if (geom.type === 'Polygon') process(geom.coordinates[0]);
+      else if (geom.type === 'MultiPolygon') {
+        let best = null, bestLen = -1;
+        for (const poly of geom.coordinates) {
+          const r = poly[0]; if (r && r.length > bestLen) { bestLen = r.length; best = r; }
+        }
+        if (best) process(best);
+      }
+      return n ? [sx / n, sy / n] : null;
+    }
+    function isExcluded(props) {
+      const iso  = props.ISO_A3 || props.ADM0_A3 || props.iso_a3 || '';
+      const name = props.NAME   || props.NAME_EN || props.ADMIN  || props.name || '';
+      return iso === 'ISR' || name === 'Israel';
+    }
+    // Pull Natural Earth 110m administrative-0 boundaries from jsdelivr's
+    // GitHub mirror.  ~250 KB; cached aggressively by the CDN.
+    const NE_URL = 'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@v5.1.2/geojson/ne_110m_admin_0_countries.geojson';
+    fetch(NE_URL).then(r => r.ok ? r.json() : null).then((data) => {
+      const features = data && data.features ? data.features : null;
+      if (!features) return;
+      // Base map: fill every country in black so the land mass is contiguous;
+      // Israel is still filled in here (so there's no yellow gap), but its
+      // border + label are skipped below per the site-wide constraint.
+      mctx.fillStyle = LAND;
+      for (const f of features) {
+        forRings(f.geometry, (ring) => { pathRing(mctx, ring); mctx.fill(); });
+      }
+      drawTitle(mctx);
+      if (typeof mapTex !== 'undefined' && mapTex) mapTex.needsUpdate = true;
+      // Overlay: borders.
+      octx.clearRect(0, 0, mw, mh);
+      octx.strokeStyle = STROKE;
+      octx.lineWidth = Math.max(1, 1.5 * (mw / 1280));
+      octx.lineJoin  = 'round';
+      for (const f of features) {
+        if (isExcluded(f.properties || {})) continue;
+        forRings(f.geometry, (ring) => { pathRing(octx, ring); octx.stroke(); });
+      }
+      // Overlay: country names.
+      octx.fillStyle = STROKE;
+      octx.textAlign = 'center'; octx.textBaseline = 'middle';
+      const lScale = mw / 1280;
+      octx.font = `500 ${Math.round(14 * lScale)}px Inter, system-ui, sans-serif`;
+      for (const f of features) {
+        const props = f.properties || {};
+        if (isExcluded(props)) continue;
+        const name = props.NAME || props.NAME_EN || props.ADMIN || props.name;
+        if (!name) continue;
+        let lon, lat;
+        if (typeof props.LABEL_X === 'number' && typeof props.LABEL_Y === 'number') {
+          lon = props.LABEL_X; lat = props.LABEL_Y;
+        } else {
+          const c = centroidLL(f.geometry);
+          if (!c) continue;
+          [lon, lat] = c;
+        }
+        const [px, py] = ll(lon, lat);
+        octx.fillText(name, px, py);
+      }
+      if (typeof overlayTex !== 'undefined' && overlayTex) overlayTex.needsUpdate = true;
+    }).catch(() => {});
   } else {
     // aged paper background
     mctx.fillStyle = '#f5e8c0';
@@ -5128,6 +4642,21 @@ function buildCorkBoardWithMap(opts = {}) {
   const map = new THREE.Mesh(new THREE.PlaneGeometry(MW, MH), mapMat);
   map.position.set(0, PANEL_Y, BD / 2 + 0.001);
   g.add(map);
+  // Overlay mesh — country borders + names in white, drawn on top of the
+  // base map.  Stays at opacity 0 until the camera zooms in on a pin; then
+  // the projects-world update loop fades it up.
+  let overlayTex = null, overlayMat = null, overlayMesh = null;
+  if (overlayCanvas) {
+    overlayTex = new THREE.CanvasTexture(overlayCanvas);
+    overlayTex.colorSpace = THREE.SRGBColorSpace;
+    overlayTex.anisotropy = 8;
+    overlayMat = new THREE.MeshBasicMaterial({
+      map: overlayTex, transparent: true, opacity: 0, depthWrite: false,
+    });
+    overlayMesh = new THREE.Mesh(new THREE.PlaneGeometry(MW, MH), overlayMat);
+    overlayMesh.position.set(0, PANEL_Y, BD / 2 + 0.0025);
+    g.add(overlayMesh);
+  }
   // expose key dims so callers can position cameras / iframes precisely
   g.userData.BW = BW;
   g.userData.BH = BH;
@@ -5136,6 +4665,8 @@ function buildCorkBoardWithMap(opts = {}) {
   g.userData.MH = MH;
   g.userData.PANEL_Y = PANEL_Y;
   g.userData.mapMesh = map;
+  g.userData.overlayMesh = overlayMesh;
+  g.userData.overlayMat  = overlayMat;
   g.userData.realistic = realistic;
 
   // ---- red push pins ----
@@ -7139,6 +6670,7 @@ function buildProjectsScene() {
       // biotech-pin metadata (only present on the realistic board)
       companies: b.userData.companies || [],
       pins: b.userData.companyPins || [],
+      overlayMat: b.userData.overlayMat || null,
       // demo-board metadata (only present on the stylised demo board)
       demoBoard: !!b.userData.demoBoard,
       demoItems: b.userData.demoItems || [],
@@ -8309,31 +7841,45 @@ html { scroll-behavior: smooth; }
       white.emergePatch.material.opacity = 0;
     }
 
-    // "JUMP IN" sign animation: a gentle pre-snap sway, then the left pole
-    // breaks and the panel pendulums down to hang sideways off the right
-    // pole.  Pendulum simulation with damping so it settles naturally.
+    // "JUMP IN" sign animation: a gentle pre-snap sway, then the left rope
+    // detaches and the panel pendulums around the right rope until it
+    // settles dangling sideways.  Uses uniform-plate-hinged-at-corner
+    // physics so the rest pose is realistically tilted (centre of mass
+    // hangs directly below the pivot).
     if (white.jumpSign) {
       white.jumpSignT += dt;
+      const jsW = white.jumpSign.panelW;
+      const jsH = white.jumpSign.panelH;
+      // Natural rest angle of a uniform plate hinged at its top-right
+      // corner: CCW rotation = atan(W/H) — diagonal points straight down.
+      const restAngle = Math.atan(jsW / jsH);
       if (!white.jumpSignFallStarted) {
-        // Tiny ambient sway before the break — barely perceptible breeze.
-        white.jumpSign.pivot.rotation.z = Math.sin(white.jumpSignT * 1.6) * 0.012;
+        // Tiny ambient sway before the snap — barely perceptible breeze.
+        white.jumpSign.pivot.rotation.z = Math.sin(white.jumpSignT * 1.4) * 0.014;
         if (white.jumpSignT >= JUMP_SIGN_FALL_AT) {
           white.jumpSignFallStarted = true;
           white.jumpSignAngle  = white.jumpSign.pivot.rotation.z;
-          white.jumpSignAngVel = -0.45;            // kick to start the fall
-          // The detached pole leans away a little to sell the snap.
-          white.jumpSign.leftPole.rotation.z = -0.18;
-          white.jumpSign.leftPole.position.y -= 0.04;
+          // Initial CCW kick so the fall starts visibly even if rest is close.
+          white.jumpSignAngVel = 0.55;
+          // Left rope visually "snaps": its bottom retracts a little because
+          // it's no longer being pulled down by the panel's weight.
+          const lr = white.jumpSign.leftRope;
+          const shrink = 0.94;
+          lr.scale.y = shrink;
+          lr.position.y = white.jumpSign.ceilingY - (white.jumpSign.ropeLen * shrink) * 0.5;
           playCreak();
         }
       } else {
-        // Pendulum from a horizontal arm hinged at the right pole's top.
-        const L = white.jumpSign.panelW * 0.5;
-        const G = 11.0;
-        const angFromDown = white.jumpSignAngle + Math.PI / 2;
-        const angAccel = -(G / L) * Math.sin(angFromDown);
+        // Rigid plate hinged at a corner: α = -(3g / (2·L_diag)) · sin(θ - θ_rest)
+        // where L_diag = sqrt(W² + H²)/2.  Coefficient tuned slightly so the
+        // first swing reads quickly without looking jelly-like.
+        const G    = 11.5;
+        const Ld   = Math.sqrt(jsW * jsW + jsH * jsH) * 0.5;
+        const coef = (3 * G) / (4 * Ld);
+        const phi  = white.jumpSignAngle - restAngle;
+        const angAccel = -coef * Math.sin(phi);
         white.jumpSignAngVel += angAccel * dt;
-        white.jumpSignAngVel *= Math.exp(-1.4 * dt);   // damping
+        white.jumpSignAngVel *= Math.exp(-1.5 * dt);    // damping
         white.jumpSignAngle  += white.jumpSignAngVel * dt;
         white.jumpSign.pivot.rotation.z = white.jumpSignAngle;
       }
@@ -9676,6 +9222,21 @@ html { scroll-behavior: smooth; }
       projectsWorld.camLook.lerp(camTargetLook, kk);
       projectsWorld.camera.position.copy(projectsWorld.camPos);
       projectsWorld.camera.lookAt(projectsWorld.camLook);
+
+      // Zoom factor (0 = full board view, 1 = zoomed in on a pin): fades the
+      // country-borders+names overlay in, and shrinks the pins so they no
+      // longer dwarf the country they're sitting on.
+      if (board.realistic) {
+        if (projectsWorld.boardZoom == null) projectsWorld.boardZoom = 0;
+        const zTarget = zoomed ? 1 : 0;
+        const zk = 1 - Math.pow(0.0008, dt);
+        projectsWorld.boardZoom = THREE.MathUtils.lerp(projectsWorld.boardZoom, zTarget, zk);
+        if (board.overlayMat) board.overlayMat.opacity = projectsWorld.boardZoom;
+        if (board.pins && board.pins.length) {
+          const ps = THREE.MathUtils.lerp(1.0, 0.42, projectsWorld.boardZoom);
+          for (const p of board.pins) if (p.group) p.group.scale.setScalar(ps);
+        }
+      }
 
       projectsPromptEl.style.display = 'none';
 
