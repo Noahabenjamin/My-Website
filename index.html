@@ -447,9 +447,9 @@
   #biopharma-overlay.as-card {
     display: block;
     pointer-events: auto;
-    width: 340px;
+    width: 320px;
     max-width: calc(100vw - 40px);
-    padding: 18px 22px 20px;
+    padding: 16px 20px 18px;
     background: rgba(18, 20, 26, 0.94);
     border: 1px solid rgba(245, 239, 226, 0.22);
     border-radius: 12px;
@@ -2331,8 +2331,8 @@ function buildWhiteWorld() {
   // north of the rim — close enough that the arrow visibly points at it.
   const jumpSign = buildJumpInSign();
   const jumpAngle = THREE.MathUtils.degToRad(-70);
-  const jumpDist  = 1.85;
-  jumpSign.group.scale.setScalar(1.0);
+  const jumpDist  = 1.95;
+  jumpSign.group.scale.setScalar(1.25);
   jumpSign.group.position.set(
     Math.sin(jumpAngle) * jumpDist,
     0,
@@ -4556,7 +4556,7 @@ function buildCorkBoardWithMap(opts = {}) {
     // ===== Modern atlas: black land on yellow water, white borders + names =====
     // Real Natural-Earth 110m country geometry is fetched async; until it
     // lands the canvas just shows the yellow ocean + the title overlay.
-    const WATER  = '#f0c800';
+    const WATER  = '#ffe933';         // lemon yellow
     const LAND   = '#000000';
     const STROKE = '#ffffff';
     function ll(lon, lat) {
@@ -4566,13 +4566,18 @@ function buildCorkBoardWithMap(opts = {}) {
     mctx.fillStyle = WATER;
     mctx.fillRect(0, 0, mw, mh);
     // Title in dark text so it sits comfortably on the yellow water; redrawn
-    // after the land lands so it never gets covered.
+    // after the land lands so it never gets covered.  The header band
+    // re-paints a yellow strip at the very top so the title never sits on
+    // top of northern Canada / Greenland islands.
     const tScale = mw / 1280;
+    const HEADER_H = 130 * tScale;
     function drawTitle(ctx) {
+      ctx.fillStyle = WATER;
+      ctx.fillRect(0, 0, mw, HEADER_H);
       ctx.fillStyle = '#101010';
       ctx.font = `600 ${Math.round(38 * tScale)}px "Inter", system-ui, sans-serif`;
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText('Biotech world', 40 * tScale, 54 * tScale);
+      ctx.fillText('Biotech world', 40 * tScale, 78 * tScale);
       ctx.font = `300 ${Math.round(13 * tScale)}px "Inter", system-ui, sans-serif`;
       ctx.fillStyle = '#404040'; ctx.textAlign = 'right';
       ctx.fillText('hover a pin to read the city — click to see the company',
@@ -4681,6 +4686,8 @@ function buildCorkBoardWithMap(opts = {}) {
         const [px, py] = ll(lon, lat);
         octx.fillText(name, px, py);
       }
+      // Don't let arctic country borders bleed through the title header.
+      octx.clearRect(0, 0, mw, HEADER_H);
       if (typeof overlayTex !== 'undefined' && overlayTex) overlayTex.needsUpdate = true;
     }).catch(() => {});
   } else {
@@ -4784,37 +4791,35 @@ function buildCorkBoardWithMap(opts = {}) {
     color: 0x5a5d63, roughness: 0.25, metalness: 0.92,
   });
 
-  // Build one realistic push-pin (classic dome thumbtack):
-  //   * sharp metal shaft hidden inside the cork (only the head is visible)
-  //   * a single solid red plastic head — full sphere flattened along the
-  //     pin axis so it reads as the familiar pressed-in thumbtack dome.
+  // Build one realistic push-pin (classic ball-on-spike map pin):
+  //   * sharp metal spike sticking up out of the cork
+  //   * a glossy red ball perched on top of the spike — the silhouette
+  //     reads as a ball-headed pin from any angle, and the small ball
+  //     keeps clusters of pins individually distinguishable.
   // The mesh is returned as a group anchored at the cork surface
   // (local +Z = away from cork).
   function buildPushPin() {
     const pin = new THREE.Group();
-    const HEAD_R    = 0.026;          // dome radius (a touch bigger than the
-                                       // old disc so each pin reads clearly)
-    const HEAD_FLAT = 0.55;            // flatten factor along the pin axis
-    const SHAFT_R   = 0.0033;
-    const SHAFT_LEN = 0.020;
+    const BALL_R    = 0.011;          // small round ball head
+    const SHAFT_R   = 0.0017;          // thin spike
+    const SHAFT_LEN = 0.022;           // visible spike length above the cork
 
-    // Sharp metal shaft, hidden behind the cork (the pin is "pressed in").
+    // Sharp metal spike — tapered toward the tip.
     const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(SHAFT_R, SHAFT_R * 0.30, SHAFT_LEN, 10),
+      new THREE.CylinderGeometry(SHAFT_R, SHAFT_R * 0.55, SHAFT_LEN, 10),
       pinShaftMat
     );
     shaft.rotation.x = Math.PI / 2;
-    shaft.position.z = -SHAFT_LEN * 0.45;
-    shaft.castShadow = false;
+    shaft.position.z = SHAFT_LEN * 0.5;
+    shaft.castShadow = true;
     pin.add(shaft);
 
-    // Glossy red plastic head — flush against the cork, dome facing out.
+    // Glossy red ball on top of the spike.
     const head = new THREE.Mesh(
-      new THREE.SphereGeometry(HEAD_R, 32, 18),
+      new THREE.SphereGeometry(BALL_R, 24, 16),
       pinHeadMat
     );
-    head.scale.set(1, 1, HEAD_FLAT);
-    head.position.z = HEAD_R * HEAD_FLAT * 0.5;
+    head.position.z = SHAFT_LEN + BALL_R * 0.92;
     head.castShadow = true;
     pin.add(head);
 
@@ -4857,13 +4862,13 @@ function buildCorkBoardWithMap(opts = {}) {
         desc: "American firm built around Keytruda, the world's top-selling cancer immunotherapy. Also a leader in vaccines (Gardasil, Pneumovax), animal health and HIV. Known as MSD outside the US and Canada." },
       { name: 'Pfizer', city: 'New York City, USA', lat: 40.71, lon: -74.01,
         desc: "New York-headquartered company best known to the public for the Comirnaty mRNA COVID-19 vaccine (with BioNTech) and the antiviral Paxlovid. Broad portfolio across oncology, vaccines, internal medicine and rare disease." },
-      { name: 'Novartis', city: 'Basel, Switzerland', lat: 47.56, lon: 7.59, dx: 0.04, dy: 0,
+      { name: 'Novartis', city: 'Basel, Switzerland', lat: 47.56, lon: 7.59, dx: 0.008, dy: 0,
         desc: "Swiss group, across the Rhine from Roche. After spinning out Sandoz generics in 2023 it focuses on innovative medicines: Entresto for heart failure, Cosentyx in immunology, and the CAR-T cell therapy Kymriah." },
       { name: 'Amgen', city: 'Thousand Oaks, USA', lat: 34.17, lon: -118.84,
         desc: "Pioneering biotech founded 1980 in suburban Los Angeles. Proved recombinant protein drugs could be a real industry with Epogen and Neupogen; today known for Repatha, Otezla, Prolia and tezepelumab (with AstraZeneca)." },
       { name: 'Sanofi', city: 'Paris, France', lat: 48.86, lon: 2.35,
         desc: "French multinational with a strong vaccines arm (Sanofi Pasteur) and Dupixent — the world's best-selling drug for atopic dermatitis and asthma — co-developed with Regeneron. Headquartered in Paris." },
-      { name: 'Bristol Myers Squibb', city: 'New York City, USA', lat: 40.71, lon: -74.01, dx: -0.03, dy: -0.04,
+      { name: 'Bristol Myers Squibb', city: 'New York City, USA', lat: 40.71, lon: -74.01, dx: -0.006, dy: -0.008,
         desc: "New York company built around the immuno-oncology drug Opdivo and the blood-thinner Eliquis. The $74B Celgene merger added Revlimid, Pomalyst and Reblozyl, plus the CAR-T platform behind Breyanzi and Abecma." },
       { name: 'Gilead Sciences', city: 'Foster City, USA', lat: 37.56, lon: -122.27,
         desc: "Bay-Area biotech that effectively cured hepatitis C with Sovaldi and Harvoni, and has long led HIV care (Biktarvy, Descovy, Truvada). Recently expanded into oncology via the Immunomedics acquisition." },
@@ -4873,7 +4878,7 @@ function buildCorkBoardWithMap(opts = {}) {
         desc: "Hudson-Valley company anchored by Eylea (macular degeneration) and Dupixent (with Sanofi). Built one of biotech's most productive antibody-engineering platforms around its VelocImmune transgenic mice." },
       { name: 'Moderna', city: 'Cambridge MA, USA', lat: 42.37, lon: -71.10,
         desc: "Cambridge biotech that mass-produced the first mRNA vaccine to reach authorisation during COVID-19. Pipeline today spans flu, RSV, latent viruses (CMV, EBV) and personalised cancer vaccines, all on the same mRNA platform." },
-      { name: 'Biogen', city: 'Cambridge MA, USA', lat: 42.37, lon: -71.10, dx: 0.04, dy: 0,
+      { name: 'Biogen', city: 'Cambridge MA, USA', lat: 42.37, lon: -71.10, dx: 0.008, dy: 0,
         desc: "One of biotech's oldest companies, founded 1978. Pioneer in multiple sclerosis therapy (Tysabri, Tecfidera) and home to the controversial Alzheimer's antibodies Aduhelm and Leqembi (the latter co-developed with Eisai)." },
       { name: 'BioNTech', city: 'Mainz, Germany', lat: 49.99, lon: 8.27,
         desc: "Mainz biotech founded by Uğur Şahin and Özlem Türeci to develop mRNA cancer vaccines. Partnered with Pfizer to bring the first COVID-19 vaccine to market in under a year; the cancer programs remain its long-term focus." },
@@ -4884,13 +4889,13 @@ function buildCorkBoardWithMap(opts = {}) {
       // --- additional 30 biotech / biopharma companies ---
       { name: 'Takeda', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69,
         desc: "Japan's largest pharmaceutical company, founded in Osaka in 1781. Transformed into a global player after the $62B acquisition of Shire in 2019; strong in rare diseases, oncology, gastroenterology and plasma-derived therapies." },
-      { name: 'Daiichi Sankyo', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: 0.05, dy: 0,
+      { name: 'Daiichi Sankyo', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: 0.01, dy: 0,
         desc: "Tokyo-based pharma whose ADC platform with AstraZeneca produced Enhertu — currently one of the most important breast-cancer therapies — alongside the antiplatelet Effient and the antihypertensive Olmesartan." },
-      { name: 'Astellas', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: -0.05, dy: 0,
+      { name: 'Astellas', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: -0.01, dy: 0,
         desc: "Japanese firm formed from the 2005 Yamanouchi–Fujisawa merger. Best known for the prostate-cancer franchise Xtandi (with Pfizer) and the gene-therapy candidate AT132; investing heavily in cell and gene programs." },
-      { name: 'Eisai', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: 0, dy: 0.04,
+      { name: 'Eisai', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: 0, dy: 0.008,
         desc: "Tokyo company that co-developed the Alzheimer's antibody Leqembi with Biogen and the antiepileptic Fycompa. Long-running focus on neurology and oncology rooted in its Tsukuba research centre." },
-      { name: 'Chugai', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: 0, dy: -0.04,
+      { name: 'Chugai', city: 'Tokyo, Japan', lat: 35.69, lon: 139.69, dx: 0, dy: -0.008,
         desc: "Roche's Japanese affiliate (61% owned), responsible for Actemra (tocilizumab) and Hemlibra, the bispecific antibody that transformed haemophilia A care. Operates as Roche's Asia-Pacific research engine." },
       { name: 'Otsuka', city: 'Osaka, Japan', lat: 34.69, lon: 135.50,
         desc: "Osaka-headquartered group spanning pharma, nutraceuticals (Pocari Sweat) and diagnostics. In medicines, best known for Abilify and Rexulti — atypical antipsychotics co-developed with Lundbeck — and the TB drug Deltyba." },
@@ -4910,11 +4915,11 @@ function buildCorkBoardWithMap(opts = {}) {
         desc: "Suzhou-based biotech founded 2011. Co-developed the PD-1 antibody Tyvyt (sintilimab) with Eli Lilly and has built one of China's deepest oncology and metabolic-disease pipelines." },
       { name: 'BeiGene', city: 'Beijing, China', lat: 39.90, lon: 116.40,
         desc: "Founded 2010 in Beijing; later rebranded as BeOne Medicines with a Cambridge MA registration. Best known for Brukinsa (zanubrutinib), the BTK inhibitor that overtook ibrutinib in CLL after head-to-head data." },
-      { name: 'Genmab', city: 'Copenhagen, Denmark', lat: 55.68, lon: 12.57, dx: -0.05, dy: 0,
+      { name: 'Genmab', city: 'Copenhagen, Denmark', lat: 55.68, lon: 12.57, dx: -0.01, dy: 0,
         desc: "Copenhagen biotech behind the antibody-engineering technology DuoBody (bispecifics) and the CD38 antibody Darzalex, partnered with J&J. Recently launched Tepkinly (epcoritamab) for lymphoma with AbbVie." },
       { name: 'Lundbeck', city: 'Valby, Denmark', lat: 55.66, lon: 12.50,
         desc: "Danish neuroscience specialist founded 1915. Built around CNS medicines — Cipralex/Lexapro, Brintellix/Trintellix for depression, and Rexulti (with Otsuka) for schizophrenia and Alzheimer's-related agitation." },
-      { name: 'Bavarian Nordic', city: 'Hellerup, Denmark', lat: 55.73, lon: 12.57, dx: 0.05, dy: 0.03,
+      { name: 'Bavarian Nordic', city: 'Hellerup, Denmark', lat: 55.73, lon: 12.57, dx: 0.01, dy: 0.006,
         desc: "Vaccine company headquartered north of Copenhagen. Maker of the smallpox/mpox vaccine Jynneos (Imvanex) and the only FDA-approved Ebola Sudan vaccine candidate; long-time partner of US BARDA." },
       { name: 'Argenx', city: 'Ghent, Belgium', lat: 51.05, lon: 3.72,
         desc: "Ghent-based biotech that pioneered FcRn-blocking antibodies. Its lead drug Vyvgart (efgartigimod) transformed treatment for generalised myasthenia gravis and is rapidly expanding into other autoimmune indications." },
@@ -4922,11 +4927,11 @@ function buildCorkBoardWithMap(opts = {}) {
         desc: "Brussels biopharma with strengths in immunology and neurology. Major products include the epilepsy drug Vimpat and the psoriasis antibody Bimzelx (bimekizumab), one of the few IL-17A/F dual inhibitors on the market." },
       { name: 'Galapagos', city: 'Mechelen, Belgium', lat: 51.03, lon: 4.48,
         desc: "Belgian biotech that out-licensed the JAK1 inhibitor Jyseleca (filgotinib) to Gilead, then pivoted into cell therapy. Operates a decentralised CAR-T manufacturing network that builds patient-specific therapies in days." },
-      { name: 'Ipsen', city: 'Boulogne-Billancourt, France', lat: 48.83, lon: 2.24, dx: 0.04, dy: -0.05,
+      { name: 'Ipsen', city: 'Boulogne-Billancourt, France', lat: 48.83, lon: 2.24, dx: 0.008, dy: -0.01,
         desc: "French specialty-care pharma based just outside Paris. Focused on oncology (Cabometyx via licence from Exelixis), rare diseases (Bylvay, Increlex) and neuroscience — the Dysport botulinum-toxin franchise." },
-      { name: 'Servier', city: 'Suresnes, France', lat: 48.87, lon: 2.23, dx: -0.05, dy: -0.05,
+      { name: 'Servier', city: 'Suresnes, France', lat: 48.87, lon: 2.23, dx: -0.01, dy: -0.01,
         desc: "French non-profit-foundation-owned pharma headquartered in Suresnes. Strong in cardiology (Procoralan) and oncology — acquired Agios's oncology arm in 2021, bringing IDH inhibitors Tibsovo and Idhifa." },
-      { name: 'Lonza', city: 'Basel, Switzerland', lat: 47.56, lon: 7.59, dx: -0.04, dy: -0.04,
+      { name: 'Lonza', city: 'Basel, Switzerland', lat: 47.56, lon: 7.59, dx: -0.008, dy: -0.008,
         desc: "Swiss contract development and manufacturing leader (CDMO). Manufactures everything from antibodies and cell therapies to mRNA — a key partner for Moderna during the COVID-19 vaccine ramp." },
       { name: 'Galderma', city: 'Zug, Switzerland', lat: 47.17, lon: 8.52,
         desc: "Zug-based dermatology specialist spun out of Nestlé. Markets the injectable filler Restylane, the IL-31 antibody Nemluvio (nemolizumab) for atopic dermatitis, and one of the largest skincare portfolios in the world." },
@@ -4934,7 +4939,7 @@ function buildCorkBoardWithMap(opts = {}) {
         desc: "India's largest pharmaceutical company. Generics-led globally, but its specialty arm produces Ilumya for psoriasis and the dermatology brand Cequa; the world's largest manufacturer of cardiac and oncology generics." },
       { name: "Dr. Reddy's", city: 'Hyderabad, India', lat: 17.39, lon: 78.49,
         desc: "Hyderabad-based generics and biosimilars maker founded 1984. Among India's largest exporters of pharmaceuticals to the US and EU, and a leading manufacturer of complex generics and ophthalmology products." },
-      { name: 'Cipla', city: 'Mumbai, India', lat: 19.07, lon: 72.88, dx: -0.06, dy: 0,
+      { name: 'Cipla', city: 'Mumbai, India', lat: 19.07, lon: 72.88, dx: -0.012, dy: 0,
         desc: "Mumbai pharma founded 1935, best known internationally for slashing HIV-medicine prices in Africa in the 2000s, enabling generic ART access. Today a major respiratory and oncology generics supplier worldwide." },
       { name: 'Biocon', city: 'Bangalore, India', lat: 12.97, lon: 77.59,
         desc: "Bangalore-based biotech founded by Kiran Mazumdar-Shaw in 1978. India's largest biologics maker — diabetes insulins and a leading biosimilars portfolio of trastuzumab, bevacizumab, adalimumab and pegfilgrastim." },
@@ -7279,39 +7284,15 @@ html { scroll-behavior: smooth; }
   }
 
   function _bpPositionCard(headMesh) {
-    // Anchor the card near where the pin WILL appear after the camera has
-    // zoomed into the country — i.e., project headWorld through a virtual
-    // camera placed at the zoomed-in position.  This way, by the time the
-    // camera lerp finishes, the pin has slid right up to the card edge.
-    const headWorld = new THREE.Vector3();
-    headMesh.getWorldPosition(headWorld);
-    const board = projectsWorld.activeBoard;
-    const camDist = 0.55;
-    const tempCam = projectsWorld.camera.clone();
-    tempCam.position.set(
-      headWorld.x + board.faceDir.x * camDist,
-      headWorld.y + 0.05,
-      headWorld.z + board.faceDir.z * camDist
-    );
-    tempCam.lookAt(headWorld);
-    tempCam.updateMatrixWorld();
-    tempCam.updateProjectionMatrix();
-    const ndc = headWorld.clone().project(tempCam);
-    const sx  = (ndc.x * 0.5 + 0.5) * window.innerWidth;
-    const sy  = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
-    // approximate card dimensions (matches the .as-card CSS) — avoids the
-    // size-mid-transition trap of getBoundingClientRect()
-    const cw  = 340;
+    // Pin the card to the bottom-right corner of the viewport so it never
+    // sits on top of other map pins.  Same spot every time → predictable
+    // for the reader, and the map area itself stays unobstructed.
+    void headMesh;
+    const cw  = 320;
     const ch  = 240;
-    const gap = 28;
-    // prefer to the right of the pin, fall back to left if it would clip
-    let left = sx + gap;
-    if (left + cw > window.innerWidth - 12) left = sx - gap - cw;
-    if (left < 12) left = 12;
-    // anchor so the title sits a bit above the pin (gives the "moves up" feel)
-    let top = sy - ch * 0.55;
-    if (top < 12) top = 12;
-    if (top + ch > window.innerHeight - 12) top = window.innerHeight - 12 - ch;
+    const margin = 24;
+    const left = window.innerWidth  - cw - margin;
+    const top  = window.innerHeight - ch - margin;
     bpEl.style.left = `${left}px`;
     bpEl.style.top  = `${top}px`;
     bpEl.style.transform = '';
