@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Noah Benjamin</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><ellipse cx='32' cy='32' rx='30' ry='26' fill='%23ffffff' stroke='%23000000' stroke-width='2.5'/><circle cx='22' cy='32' r='4.5' fill='%23000000'/><circle cx='42' cy='32' r='4.5' fill='%23000000'/><rect x='22' y='30.25' width='20' height='3.5' fill='%23000000'/></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Anton&display=swap" rel="stylesheet" />
@@ -4973,15 +4974,14 @@ function buildCorkBoardWithMap(opts = {}) {
     g.userData.companyPins = companyPins;
   }
 
-  // ---- title note, pinned on the upper-left of the map (realistic only) ----
-  // A small white "biotech world map" note pinned over the top-left corner
-  // of the map.  Visible inside the E-press front-view zoom (camera looks at
-  // mapCentre at ~2m, ~1.78m visible width, so x≈-0.55 sits clearly on the
-  // left side of the framed view).
+  // ---- title note, pinned on the upper-left corner of the cork (realistic) ---
+  // A small white "biotech world map" note sitting mostly on the cork strip
+  // above the map, near Canada / the top-left of the world.  A small sliver
+  // overlaps the yellow ocean so it visually anchors onto the map.
   if (realistic) {
     const paperW = 0.58, paperH = 0.14;
-    const paperX = -0.55;
-    const paperY = PANEL_Y + MH / 2 - paperH / 2 - 0.07;   // tucked just inside top edge
+    const paperX = -0.95;
+    const paperY = PANEL_Y + MH / 2 + 0.04;                // mostly on cork, ~20% on yellow
     const paperZ = BD / 2 + 0.0035;                        // in front of map + overlay
 
     const tcv = document.createElement('canvas');
