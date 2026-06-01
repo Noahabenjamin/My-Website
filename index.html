@@ -98,33 +98,6 @@
     transition: background 0.2s;
   }
   #laptop-open-site:hover { background: rgba(255,255,255,0.14); }
-  /* "click to open" pill for the biotech demos board — same look as the
-     laptop pill, but anchored to the bottom of the screen.  Toggled by
-     the projects update loop. */
-  #demo-open-site {
-    position: fixed;
-    bottom: 36px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 36;
-    padding: 12px 24px;
-    background: rgba(255,255,255,0.07);
-    color: #f5efe2;
-    border: 1px solid rgba(245,239,226,0.5);
-    border-radius: 999px;
-    font-family: 'Cormorant Garamond', Georgia, serif;
-    font-style: italic;
-    font-weight: 400;
-    font-size: 20px;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    user-select: none;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    display: none;
-    transition: background 0.2s;
-  }
-  #demo-open-site:hover { background: rgba(255,255,255,0.14); }
   /* Hamburger menu button (replaces the old sound toggle).  Same pill
      proportions, but a small circle with three horizontal lines.        */
   #menu-btn {
@@ -885,10 +858,6 @@
      view.  Sits on the right side of the screen, next to the on-laptop
      website, and opens paattikiiltoon.fi in a new tab. -->
 <button id="laptop-open-site" type="button">click to open</button>
-<!-- "click to open" pill shown only while standing in front of the biotech
-     demos board (and hidden again whenever the player is inside one of the
-     specimen simulations).  Opens simedo.work in a new tab. -->
-<button id="demo-open-site" type="button">click to open</button>
 <!-- Hamburger menu (top-right) — opens a dropdown with sound + controls -->
 <button id="menu-btn" type="button" aria-label="open menu">
   <span></span><span></span><span></span>
@@ -5004,14 +4973,14 @@ function buildCorkBoardWithMap(opts = {}) {
     g.userData.companyPins = companyPins;
   }
 
-  // ---- title note, pinned on the upper-right of the map (realistic only) ----
-  // A small white "biotech world map" note pinned over the top-right corner
+  // ---- title note, pinned on the upper-left of the map (realistic only) ----
+  // A small white "biotech world map" note pinned over the top-left corner
   // of the map.  Visible inside the E-press front-view zoom (camera looks at
-  // mapCentre at ~2m, ~1.78m visible width, so x≈+0.55 sits clearly on the
-  // right side of the framed view).
+  // mapCentre at ~2m, ~1.78m visible width, so x≈-0.55 sits clearly on the
+  // left side of the framed view).
   if (realistic) {
     const paperW = 0.58, paperH = 0.14;
-    const paperX = 0.55;
+    const paperX = -0.55;
     const paperY = PANEL_Y + MH / 2 - paperH / 2 - 0.07;   // tucked just inside top edge
     const paperZ = BD / 2 + 0.0035;                        // in front of map + overlay
 
@@ -6167,8 +6136,9 @@ function buildBiotechDemoBoard() {
   tctx.fillStyle = '#5c4f3a';
   tctx.fillText('click a specimen to rotate it — E or ESC to step back', 50, 108);
   // "check out my project on simedo.work" — top-right, with simedo.work
-  // visibly styled like a link (blue + underlined) so the player knows the
-  // pill at the bottom of the screen opens it.
+  // styled like a real link (blue + underlined) and clickable in-world via
+  // an invisible hit-plane (see below).  A small italic "← click here" cue
+  // sits to the left of the link as a hint.
   tctx.textAlign = 'right';
   tctx.font = '300 22px "Inter", system-ui, sans-serif';
   tctx.fillStyle = '#5c4f3a';
@@ -6181,6 +6151,13 @@ function buildBiotechDemoBoard() {
   // Underline the link to reinforce the "press to open" hint.
   const linkW = tctx.measureText(linkText).width;
   tctx.fillRect(1230 - linkW, linkY + 6, linkW, 3);
+  // "← click here" hint immediately to the left of the link text.
+  const hintText = '← click here';
+  const hintRightX = 1230 - linkW - 16;
+  tctx.font = 'italic 600 24px "Inter", system-ui, sans-serif';
+  tctx.fillStyle = '#1d6fe8';
+  tctx.fillText(hintText, hintRightX, linkY - 4);
+  const hintW = tctx.measureText(hintText).width;
   const cardTex = new THREE.CanvasTexture(tcv);
   cardTex.colorSpace = THREE.SRGBColorSpace;
   cardTex.anisotropy = 8;
@@ -6190,11 +6167,11 @@ function buildBiotechDemoBoard() {
   card.position.set(0, PANEL_Y, BD / 2 + 0.001);
   g.add(card);
 
-  // Invisible hit-plane covering the rendered "simedo.work" link so the text
-  // itself is clickable (in addition to the "click to open" pill).  Padded
-  // a touch around the text + underline for a forgiving hit area.
+  // Invisible hit-plane covering the rendered "← click here" hint AND the
+  // simedo.work link, so the whole cluster is one clickable target.  Padded
+  // around the text + underline for a forgiving hit area.
   const pad = 12;
-  const hitMinX = (1230 - linkW) - pad;
+  const hitMinX = (hintRightX - hintW) - pad;
   const hitMaxX = 1230 + pad;
   const hitMinY = (linkY - 40) - pad;             // ~font height above baseline
   const hitMaxY = (linkY + 6 + 3) + pad;          // underline bottom
@@ -7174,16 +7151,6 @@ html { scroll-behavior: smooth; }
       try { window.open('https://www.paattikiiltoon.fi/', '_blank', 'noopener'); } catch (_) {}
     });
   }
-  // "click to open" pill for the biotech demos board → simedo.work.
-  // Visibility is driven by the per-frame projects-world update; this just
-  // owns the click handler.
-  const demoOpenSiteBtn = document.getElementById('demo-open-site');
-  if (demoOpenSiteBtn) {
-    demoOpenSiteBtn.addEventListener('click', () => {
-      try { window.open('https://simedo.work/', '_blank', 'noopener'); } catch (_) {}
-    });
-  }
-
   // ---- Hamburger menu (top-right) ----
   // Opens a dropdown with two sections:
   //   * Sound — Apple-style speaker icon (click to toggle mute) + volume slider
@@ -7935,8 +7902,6 @@ html { scroll-behavior: smooth; }
       if (cb) cb.style.display = 'none';
       const losb = document.getElementById('laptop-open-site');
       if (losb) losb.style.display = 'none';
-      const dosb = document.getElementById('demo-open-site');
-      if (dosb) dosb.style.display = 'none';
       projectsWorld.computerActive = false;
       projectsWorld.bookActive = false;
       projectsWorld.boxActive = false;
@@ -9371,14 +9336,6 @@ html { scroll-behavior: smooth; }
       resetWalk(b);
       resetHead(b);
 
-      // simedo.work pill: shown only while looking at the demos board and
-      // NOT inside one of the specimen simulations.
-      if (demoOpenSiteBtn) {
-        const inDemoSim = !!(projectsWorld.demoActive || projectsWorld.demoItem);
-        demoOpenSiteBtn.style.display =
-          (board.demoBoard && !inDemoSim) ? 'block' : 'none';
-      }
-
       // ---- Demo-board: animate the active item & drive its rotation ----
       const demoItem = projectsWorld.demoItem;
       let demoFocusWorld = null;
@@ -9487,11 +9444,6 @@ html { scroll-behavior: smooth; }
         projectsWorld.eHeld = false;
       }
       return;
-    }
-
-    // Out of the demos-board view → hide the simedo.work pill.
-    if (demoOpenSiteBtn && demoOpenSiteBtn.style.display !== 'none') {
-      demoOpenSiteBtn.style.display = 'none';
     }
 
     // smoothly return camera to the standard top-down view if it had moved
