@@ -98,6 +98,33 @@
     transition: background 0.2s;
   }
   #laptop-open-site:hover { background: rgba(255,255,255,0.14); }
+  /* "click to open" pill for the biotech demos board — same look as the
+     laptop pill, but anchored to the bottom of the screen.  Toggled by
+     the projects update loop. */
+  #demo-open-site {
+    position: fixed;
+    bottom: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 36;
+    padding: 12px 24px;
+    background: rgba(255,255,255,0.07);
+    color: #f5efe2;
+    border: 1px solid rgba(245,239,226,0.5);
+    border-radius: 999px;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    user-select: none;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: none;
+    transition: background 0.2s;
+  }
+  #demo-open-site:hover { background: rgba(255,255,255,0.14); }
   /* Hamburger menu button (replaces the old sound toggle).  Same pill
      proportions, but a small circle with three horizontal lines.        */
   #menu-btn {
@@ -858,6 +885,10 @@
      view.  Sits on the right side of the screen, next to the on-laptop
      website, and opens paattikiiltoon.fi in a new tab. -->
 <button id="laptop-open-site" type="button">click to open</button>
+<!-- "click to open" pill shown only while standing in front of the biotech
+     demos board (and hidden again whenever the player is inside one of the
+     specimen simulations).  Opens simedo.work in a new tab. -->
+<button id="demo-open-site" type="button">click to open</button>
 <!-- Hamburger menu (top-right) — opens a dropdown with sound + controls -->
 <button id="menu-btn" type="button" aria-label="open menu">
   <span></span><span></span><span></span>
@@ -4489,10 +4520,18 @@ function buildCorkBoardWithMap(opts = {}) {
   const corkMat = new THREE.MeshStandardMaterial({ map: corkTex, roughness: 0.92, metalness: 0.0, bumpMap: corkTex, bumpScale: 0.01 });
 
   // ---- panel + mounting height ----
-  const BW = 3.2, BH = 1.6, BD = 0.04;
-  const PANEL_Y = 1.55;                              // panel centre
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BD), corkMat);
-  panel.position.y = PANEL_Y;
+  // Realistic board: extend the cork upward by topExt to leave room for the
+  // "Biotech world" title paper that gets pinned above the map.  The map
+  // and pins continue to use PANEL_Y so their geometry is unchanged; only
+  // the cork panel + metal frame grow taller, anchored at the same floor
+  // height (so legs stay the same length).
+  const BW = 3.2, BH_MAP = 1.6, BD = 0.04;
+  const topExt = realistic ? 0.45 : 0;
+  const BH_TOTAL = BH_MAP + topExt;
+  const PANEL_Y = 1.55;                              // map centre
+  const corkCenterY = PANEL_Y + topExt / 2;          // taller cork shifted up
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(BW, BH_TOTAL, BD), corkMat);
+  panel.position.y = corkCenterY;
   panel.castShadow = true;
   panel.receiveShadow = true;
   g.add(panel);
@@ -4501,28 +4540,29 @@ function buildCorkBoardWithMap(opts = {}) {
   const metalMat = new THREE.MeshStandardMaterial({ color: 0x8b9094, roughness: 0.5, metalness: 0.8 });
   const fThick = 0.05;
   // top + bottom rails
-  for (const dy of [BH / 2, -BH / 2]) {
+  for (const dy of [BH_TOTAL / 2, -BH_TOTAL / 2]) {
     const rail = new THREE.Mesh(
       new THREE.BoxGeometry(BW + fThick * 2, fThick, BD + 0.014), metalMat
     );
-    rail.position.set(0, PANEL_Y + dy, 0);
+    rail.position.set(0, corkCenterY + dy, 0);
     rail.castShadow = true;
     g.add(rail);
   }
   // left + right rails
   for (const dx of [-(BW / 2 + fThick / 2), (BW / 2 + fThick / 2)]) {
     const rail = new THREE.Mesh(
-      new THREE.BoxGeometry(fThick, BH, BD + 0.014), metalMat
+      new THREE.BoxGeometry(fThick, BH_TOTAL, BD + 0.014), metalMat
     );
-    rail.position.set(dx, PANEL_Y, 0);
+    rail.position.set(dx, corkCenterY, 0);
     rail.castShadow = true;
     g.add(rail);
   }
 
   // ---- metal legs (a pair of straight verticals with feet and a diagonal brace) ----
+  // Cork-bottom stays at the original floor offset regardless of topExt.
   const legMat = new THREE.MeshStandardMaterial({ color: 0x6a6e74, roughness: 0.5, metalness: 0.85 });
   const legPairX = BW * 0.36;
-  const legHeight = PANEL_Y - BH / 2;                 // floor → panel bottom
+  const legHeight = PANEL_Y - BH_MAP / 2;             // floor → panel bottom
   for (const x of [-legPairX, legPairX]) {
     const leg = new THREE.Mesh(
       new THREE.CylinderGeometry(0.028, 0.028, legHeight, 12), legMat
@@ -4570,24 +4610,10 @@ function buildCorkBoardWithMap(opts = {}) {
     function ll(lon, lat) {
       return [(lon + 180) / 360 * mw, (90 - lat) / 180 * mh];
     }
-    // Base layer: solid water.
+    // Base layer: solid water.  The title + hint text no longer live on the
+    // canvas — they sit on a small white "paper note" pinned above the map.
     mctx.fillStyle = WATER;
     mctx.fillRect(0, 0, mw, mh);
-    // Title in dark text; redrawn after the land lands so it never gets
-    // covered.  Anchored at the bottom of the canvas (paired with the
-    // existing subtitle) so the northern latitudes stay fully visible.
-    const tScale = mw / 1280;
-    function drawTitle(ctx) {
-      ctx.fillStyle = '#101010';
-      ctx.font = `600 ${Math.round(38 * tScale)}px "Inter", system-ui, sans-serif`;
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText('Biotech world', 40 * tScale, mh - 28 * tScale);
-      ctx.font = `300 ${Math.round(13 * tScale)}px "Inter", system-ui, sans-serif`;
-      ctx.fillStyle = '#404040'; ctx.textAlign = 'right';
-      ctx.fillText('hover a pin to read the city — click to see the company',
-                   mw - 40 * tScale, mh - 24 * tScale);
-    }
-    drawTitle(mctx);
     // Overlay canvas: borders + country names in white, drawn into the
     // alpha-blended `overlayCanvas` and exposed to the caller below.  Stays
     // empty (fully transparent) until the geojson finishes loading.
@@ -4657,7 +4683,6 @@ function buildCorkBoardWithMap(opts = {}) {
       for (const f of features) {
         forRings(f.geometry, (ring) => { pathRing(mctx, ring); mctx.fill(); });
       }
-      drawTitle(mctx);
       if (typeof mapTex !== 'undefined' && mapTex) mapTex.needsUpdate = true;
       // Overlay: borders.
       octx.clearRect(0, 0, mw, mh);
@@ -4769,7 +4794,7 @@ function buildCorkBoardWithMap(opts = {}) {
   }
   // expose key dims so callers can position cameras / iframes precisely
   g.userData.BW = BW;
-  g.userData.BH = BH;
+  g.userData.BH = BH_TOTAL;
   g.userData.BD = BD;
   g.userData.MW = MW;
   g.userData.MH = MH;
@@ -4979,6 +5004,61 @@ function buildCorkBoardWithMap(opts = {}) {
     }
     g.userData.companies = COMPANIES;
     g.userData.companyPins = companyPins;
+  }
+
+  // ---- title paper, pinned above the map (realistic board only) ----
+  // A small white note sitting on the cork extension above the map, held by
+  // a red tack in the top-left and top-right corner.
+  if (realistic) {
+    const paperW = 1.55, paperH = 0.36;
+    // sit the paper centre above the map with a small gap so the paper's
+    // bottom edge doesn't touch the top of the map texture
+    const paperY = PANEL_Y + MH / 2 + paperH / 2 + 0.07;
+    const paperZ = BD / 2 + 0.0015;                  // sits in front of cork
+
+    const tcv = document.createElement('canvas');
+    tcv.width = 1240; tcv.height = 280;
+    const tctx = tcv.getContext('2d');
+    // White paper with a faint inner border so the edge reads on the cork
+    tctx.fillStyle = '#ffffff';
+    tctx.fillRect(0, 0, tcv.width, tcv.height);
+    tctx.strokeStyle = 'rgba(0, 0, 0, 0.10)';
+    tctx.lineWidth = 2;
+    tctx.strokeRect(10, 10, tcv.width - 20, tcv.height - 20);
+    // Title
+    tctx.fillStyle = '#101010';
+    tctx.font = '600 96px "Inter", system-ui, sans-serif';
+    tctx.textAlign = 'center'; tctx.textBaseline = 'alphabetic';
+    tctx.fillText('Biotech world', tcv.width / 2, 140);
+    // Subtitle hint
+    tctx.font = '300 34px "Inter", system-ui, sans-serif';
+    tctx.fillStyle = '#404040';
+    tctx.fillText('hover a pin to read the city — click to see the company',
+                  tcv.width / 2, 210);
+    const paperTex = new THREE.CanvasTexture(tcv);
+    paperTex.colorSpace = THREE.SRGBColorSpace;
+    paperTex.anisotropy = 8;
+    const paperMat = new THREE.MeshStandardMaterial({
+      map: paperTex, roughness: 0.85, metalness: 0.0,
+    });
+    const paper = new THREE.Mesh(new THREE.PlaneGeometry(paperW, paperH), paperMat);
+    paper.position.set(0, paperY, paperZ);
+    g.add(paper);
+
+    // Two tacks in the top corners.  Reuse buildPushPin so the visual
+    // matches the pins on the map — small inset from the paper edges so
+    // they sit neatly on the corners.
+    const tackInset = 0.05;
+    const tackZ = paperZ + 0.0005;                   // just in front of paper
+    const tackCorners = [
+      [-paperW / 2 + tackInset,  paperH / 2 - tackInset],
+      [ paperW / 2 - tackInset,  paperH / 2 - tackInset],
+    ];
+    for (const [tx, ty] of tackCorners) {
+      const { group: tack } = buildPushPin();
+      tack.position.set(tx, paperY + ty, tackZ);
+      g.add(tack);
+    }
   }
 
   return g;
@@ -6087,7 +6167,7 @@ function buildBiotechDemoBoard() {
   tctx.strokeStyle = 'rgba(80, 65, 40, 0.18)';
   tctx.lineWidth = 2;
   tctx.strokeRect(18, 18, 1280 - 36, 640 - 36);
-  // title
+  // title (top-left)
   tctx.fillStyle = '#1f1812';
   tctx.font = '600 56px "Inter", system-ui, sans-serif';
   tctx.textAlign = 'left';
@@ -6095,6 +6175,21 @@ function buildBiotechDemoBoard() {
   tctx.font = '300 18px "Inter", system-ui, sans-serif';
   tctx.fillStyle = '#5c4f3a';
   tctx.fillText('click a specimen to rotate it — E or ESC to step back', 50, 108);
+  // "check out my project on simedo.work" — top-right, with simedo.work
+  // visibly styled like a link (blue + underlined) so the player knows the
+  // pill at the bottom of the screen opens it.
+  tctx.textAlign = 'right';
+  tctx.font = '300 22px "Inter", system-ui, sans-serif';
+  tctx.fillStyle = '#5c4f3a';
+  tctx.fillText('check out my project on', 1230, 64);
+  tctx.font = '600 40px "Inter", system-ui, sans-serif';
+  tctx.fillStyle = '#1d6fe8';
+  const linkText = 'simedo.work';
+  const linkY = 112;
+  tctx.fillText(linkText, 1230, linkY);
+  // Underline the link to reinforce the "press to open" hint.
+  const linkW = tctx.measureText(linkText).width;
+  tctx.fillRect(1230 - linkW, linkY + 6, linkW, 3);
   const cardTex = new THREE.CanvasTexture(tcv);
   cardTex.colorSpace = THREE.SRGBColorSpace;
   cardTex.anisotropy = 8;
@@ -6950,6 +7045,11 @@ html { scroll-behavior: smooth; }
   function exitComputerFromIframe() {
     if (projectsWorld.computerActive) {
       projectsWorld.computerActive = false;
+      // Mark E as already-consumed so the very next frame's proximity check
+      // (which still sees Baymax standing next to the laptop) can't re-open
+      // the computer on the same press.  The proximity block clears eHeld
+      // again as soon as the player releases E.
+      projectsWorld.eHeld = true;
       try { unstickProjectsBaymax(projectsWorld.baymax); } catch (_) {}
       restoreParentFocus();
     }
@@ -7055,6 +7155,15 @@ html { scroll-behavior: smooth; }
   if (laptopOpenSiteBtn) {
     laptopOpenSiteBtn.addEventListener('click', () => {
       try { window.open('https://www.paattikiiltoon.fi/', '_blank', 'noopener'); } catch (_) {}
+    });
+  }
+  // "click to open" pill for the biotech demos board → simedo.work.
+  // Visibility is driven by the per-frame projects-world update; this just
+  // owns the click handler.
+  const demoOpenSiteBtn = document.getElementById('demo-open-site');
+  if (demoOpenSiteBtn) {
+    demoOpenSiteBtn.addEventListener('click', () => {
+      try { window.open('https://simedo.work/', '_blank', 'noopener'); } catch (_) {}
     });
   }
 
@@ -7787,6 +7896,8 @@ html { scroll-behavior: smooth; }
       if (cb) cb.style.display = 'none';
       const losb = document.getElementById('laptop-open-site');
       if (losb) losb.style.display = 'none';
+      const dosb = document.getElementById('demo-open-site');
+      if (dosb) dosb.style.display = 'none';
       projectsWorld.computerActive = false;
       projectsWorld.bookActive = false;
       projectsWorld.boxActive = false;
@@ -9221,6 +9332,14 @@ html { scroll-behavior: smooth; }
       resetWalk(b);
       resetHead(b);
 
+      // simedo.work pill: shown only while looking at the demos board and
+      // NOT inside one of the specimen simulations.
+      if (demoOpenSiteBtn) {
+        const inDemoSim = !!(projectsWorld.demoActive || projectsWorld.demoItem);
+        demoOpenSiteBtn.style.display =
+          (board.demoBoard && !inDemoSim) ? 'block' : 'none';
+      }
+
       // ---- Demo-board: animate the active item & drive its rotation ----
       const demoItem = projectsWorld.demoItem;
       let demoFocusWorld = null;
@@ -9329,6 +9448,11 @@ html { scroll-behavior: smooth; }
         projectsWorld.eHeld = false;
       }
       return;
+    }
+
+    // Out of the demos-board view → hide the simedo.work pill.
+    if (demoOpenSiteBtn && demoOpenSiteBtn.style.display !== 'none') {
+      demoOpenSiteBtn.style.display = 'none';
     }
 
     // smoothly return camera to the standard top-down view if it had moved
