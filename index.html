@@ -72,14 +72,15 @@
   }
   #laptop-close:hover { background: rgba(0,0,0,0.75); }
   /* "click to open" pill — same look as the intro tap-to-begin button.
-     Shown only while computerActive (toggled in JS). */
+     Shown only while computerActive (toggled in JS).  Sits on the right
+     side of the screen, next to the on-laptop website. */
   #laptop-open-site {
     position: fixed;
-    top: 36px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 50%;
+    right: 4%;
+    transform: translateY(-50%);
     z-index: 36;
-    padding: 14px 30px;
+    padding: 12px 24px;
     background: rgba(255,255,255,0.07);
     color: #f5efe2;
     border: 1px solid rgba(245,239,226,0.5);
@@ -87,7 +88,7 @@
     font-family: 'Cormorant Garamond', Georgia, serif;
     font-style: italic;
     font-weight: 400;
-    font-size: 24px;
+    font-size: 20px;
     letter-spacing: 0.08em;
     cursor: pointer;
     user-select: none;
@@ -485,27 +486,6 @@
     transform: translate(-50%, -100%);
     text-shadow: 0 0 10px rgba(0,0,0,0.6);
   }
-  /* Button-styled variant used when standing next to the laptop. */
-  #projects-prompt.as-button {
-    pointer-events: auto;
-    cursor: pointer;
-    font-family: 'Inter', system-ui, sans-serif;
-    font-style: normal;
-    font-weight: 500;
-    font-size: 15px;
-    letter-spacing: 0.04em;
-    color: #f5efe2;
-    padding: 9px 18px;
-    background: rgba(20, 22, 28, 0.78);
-    border: 1px solid rgba(245, 239, 226, 0.5);
-    border-radius: 999px;
-    text-shadow: none;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    transform: translate(-50%, -50%);
-    transition: background 0.15s ease-out, transform 0.15s ease-out;
-  }
-  #projects-prompt.as-button:hover { background: rgba(40, 44, 54, 0.92); }
   /* "back..." HTML overlay for the beach scene — perfectly straight against the screen */
   #beach-back {
     position: fixed;
@@ -874,6 +854,10 @@
   <div class="dm-hint">drag to rotate · E to step back</div>
 </div>
 <button id="laptop-close" type="button" aria-label="close">×</button>
+<!-- "click to open" pill shown only while the laptop is open in computer
+     view.  Sits on the right side of the screen, next to the on-laptop
+     website, and opens paattikiiltoon.fi in a new tab. -->
+<button id="laptop-open-site" type="button">click to open</button>
 <!-- Hamburger menu (top-right) — opens a dropdown with sound + controls -->
 <button id="menu-btn" type="button" aria-label="open menu">
   <span></span><span></span><span></span>
@@ -8641,8 +8625,6 @@ html { scroll-behavior: smooth; }
           cobblestone.exited = true;
           projectsWorld.entered = false;
           projectsWorld.entryT = 0;
-          projectsWorld.exiting = false;
-          projectsWorld.exitT = 0;
           projectsWorld.returning = false;
           projectsWorld.computerActive = false;
           projectsWorld.bookActive = false;
@@ -8788,7 +8770,12 @@ html { scroll-behavior: smooth; }
   // Walk-in from the RIGHT, controllable inside screen bounds, walking back
   // across the RIGHT edge returns him to cobble.  Plus collision with the
   // workbench / crates and a "click e" proximity action on the laptop.
-  const PROJECTS_BOUNDS = { minX: -11.0, maxX: 8.5, minZ: -5.0, maxZ: 5.0 };
+  // maxX extends past the visible camera frustum so the player keeps
+  // walking off-screen to the right (like the contact world lets you walk
+  // off the top).  The exit trigger fires at an inner threshold before the
+  // bounds are reached.
+  const PROJECTS_BOUNDS = { minX: -11.0, maxX: 14.0, minZ: -5.0, maxZ: 5.0 };
+  const PROJECTS_EXIT_X = 12.0;
   // Inflated rectangles so baymax's body doesn't clip through the props
   const PROJECTS_OBSTACLES = [
     // workbench (5.0 wide × 1.4 deep, centred at (0, _, -3.5)) + body buffer
@@ -8818,19 +8805,6 @@ html { scroll-behavior: smooth; }
   // initialise smooth-tracker
   projectsWorld.camLook.copy(PROJ_DEFAULT_LOOK);
   projectsWorld.camPos = PROJ_DEFAULT_CAM.clone();
-
-  // Clicking the "click to open" pill is equivalent to pressing E next to
-  // the laptop — open the computer view.  Gated to the laptop proximity
-  // flag so a stray click can't trigger it from any prompt variant.
-  projectsPromptEl.addEventListener('click', (ev) => {
-    if (!projectsPromptEl.classList.contains('as-button')) return;
-    if (!projectsWorld._nearLaptopForClick) return;
-    if (projectsWorld.computerActive) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    projectsWorld.computerActive = true;
-    projectsWorld.eHeld = true;
-  });
 
   function drawBookPage(canvas, content, isLeft) {
     const ctx = canvas.getContext('2d');
@@ -8973,7 +8947,6 @@ html { scroll-behavior: smooth; }
 
       // controls hint while reading
       projectsPromptEl.textContent = '← → flip pages   |   e to close';
-      projectsPromptEl.classList.remove('as-button');
       const above = new THREE.Vector3(book.data.x, 1.7, book.data.z - 0.55);
       const ndc = above.project(projectsWorld.camera);
       projectsPromptEl.style.left = `${(ndc.x * 0.5 + 0.5) * window.innerWidth}px`;
@@ -9005,7 +8978,6 @@ html { scroll-behavior: smooth; }
           projectsWorld.openBook.visible = false;
           if (book.meshes) for (const m of book.meshes) m.visible = true;
           projectsPromptEl.textContent = 'click e';
-          projectsPromptEl.classList.remove('as-button');
           unstickProjectsBaymax(b);
           restoreParentFocus();
         }
@@ -9060,7 +9032,6 @@ html { scroll-behavior: smooth; }
       } else {
         projectsPromptEl.textContent = '← → to move   |   e to close';
       }
-      projectsPromptEl.classList.remove('as-button');
       const above = new THREE.Vector3(crate.data.x, crate.data.s + 0.45, crate.data.z + 0.1);
       const ndcP = above.project(projectsWorld.camera);
       projectsPromptEl.style.left = `${(ndcP.x * 0.5 + 0.5) * window.innerWidth}px`;
@@ -9170,7 +9141,6 @@ html { scroll-behavior: smooth; }
             crate.interior.visible = false;
             b.visible = true;                       // re-show outer Baymax
             projectsPromptEl.textContent = 'click e';
-            projectsPromptEl.classList.remove('as-button');
             // hide whack-a-mole score / clear active target
             if (crate.gameTargets) {
               for (const t of crate.gameTargets) t.visible = false;
@@ -9210,7 +9180,6 @@ html { scroll-behavior: smooth; }
       if (laptopOpenSiteBtn) laptopOpenSiteBtn.style.display = 'block';
 
       projectsPromptEl.style.display = 'none';
-      projectsPromptEl.classList.remove('as-button');
 
       // press E or ESC to exit
       if (keys['e'] || keys['escape']) {
@@ -9347,7 +9316,6 @@ html { scroll-behavior: smooth; }
       }
 
       projectsPromptEl.style.display = 'none';
-      projectsPromptEl.classList.remove('as-button');
 
       // press E or ESC to exit straight back out to the projects world —
       // mirrors the computer / crate behaviour: one press → free to walk.
@@ -9385,39 +9353,6 @@ html { scroll-behavior: smooth; }
       animateWalk(b, projectsWorld.walkPhaseRef.value, 1.0);
       if (u >= 1) { projectsWorld.entered = true; resetWalk(b); }
       projectsPromptEl.style.display = 'none';
-      projectsPromptEl.classList.remove('as-button');
-      return;
-    }
-
-    // --- exit walk-off: keep stepping right past the boundary, off-screen ---
-    // Triggered when the player reached the right edge by walking.  The
-    // player loses control; Baymax keeps walking right until he's clear of
-    // the camera, then the stage swaps to cobble with an entry from the
-    // left edge (mirroring the original projects→cobble handoff).
-    if (projectsWorld.exiting) {
-      projectsWorld.exitT = (projectsWorld.exitT || 0) + dt;
-      const dur = 0.9;
-      const u = Math.min(1, projectsWorld.exitT / dur);
-      b.rotation.y = -Math.PI / 2;            // facing +X (walking right)
-      b.position.x = THREE.MathUtils.lerp(PROJECTS_BOUNDS.maxX - 0.05, 14, u);
-      projectsWorld.walkPhaseRef.value += dt * 14;
-      b.position.y = Math.abs(Math.sin(projectsWorld.walkPhaseRef.value)) * 0.06;
-      animateWalk(b, projectsWorld.walkPhaseRef.value, 1.0);
-      maybeFootstep(true, dt);
-      projectsPromptEl.style.display = 'none';
-      projectsPromptEl.classList.remove('as-button');
-      if (u >= 1) {
-        projectsWorld.exiting = false;
-        projectsWorld.exitT   = 0;
-        resetWalk(b);
-        cobblestone.exited    = false;
-        cobblestone.landed    = true;
-        cobblestone.landT     = COBBLE_FALL_OVER + COBBLE_LIE + COBBLE_RISE + 1.0;
-        cobblestone.entering  = true;
-        cobblestone.entryT    = 0;
-        cobblestone.entryFrom = 'left';
-        setStage('cobble');
-      }
       return;
     }
 
@@ -9431,24 +9366,18 @@ html { scroll-behavior: smooth; }
     maybeFootstep(result === 'walking', dt);
     if (result === 'walking') maybeStartHintFade();
 
-    // Return to cobble: triggered by walking off the right edge OR by a
-    // FRESH press of ESC while in the world (mirrors the beach's ESC exit).
-    // Tracking the rising edge prevents the ESC press that closes the
-    // cork-board view from immediately bouncing the player to cobble — when
-    // fullyExitBoardView() runs it sets _lastEscape = true so the next-
-    // frame "still held" escape isn't re-counted as a new press.
-    const wantsExitByEdge = b.position.x >= PROJECTS_BOUNDS.maxX - 0.05;
+    // Return to cobble: same shape as the contact (LinkedIn) world's exit —
+    // bounds extend past the visible right edge of the camera, so the player
+    // keeps walking off-screen with full control until they cross the inner
+    // PROJECTS_EXIT_X threshold, at which point the stage switches and
+    // Baymax re-enters cobble from the left edge.  ESC is kept as an
+    // immediate escape hatch (rising-edge detection so closing a board view
+    // doesn't double-trigger).
+    const wantsExitByEdge = b.position.x > PROJECTS_EXIT_X;
     const escapeNow       = !!keys['escape'];
     const wantsExitByEsc  = escapeNow && !projectsWorld._lastEscape;
     projectsWorld._lastEscape = escapeNow;
-    if (wantsExitByEdge && !projectsWorld.returning) {
-      // Walked off the right edge → Baymax keeps walking off-screen, then
-      // re-spawns from the left of cobble.
-      projectsWorld.exiting = true;
-      projectsWorld.exitT   = 0;
-      return;
-    }
-    if (wantsExitByEsc && !projectsWorld.returning) {
+    if ((wantsExitByEdge || wantsExitByEsc) && !projectsWorld.returning) {
       projectsWorld.returning = true;
       keys['escape'] = false;
       cobblestone.exited    = false;
@@ -9470,9 +9399,7 @@ html { scroll-behavior: smooth; }
       near = {
         type: 'laptop',
         dist: dLap,
-        // Sit the pill to the LEFT of the laptop in world space so it lands
-        // next to (not on top of) the computer in screen space.
-        promptPos: new THREE.Vector3(lp.x - 0.95, lp.y + 0.05, lp.z),
+        promptPos: new THREE.Vector3(lp.x, lp.y + 0.55, lp.z),
       };
     }
     for (const book of projectsWorld.books) {
@@ -9526,20 +9453,11 @@ html { scroll-behavior: smooth; }
     }
 
     if (near) {
-      if (near.type === 'laptop') {
-        projectsPromptEl.textContent = 'click to open';
-        projectsPromptEl.classList.add('as-button');
-      } else {
-        projectsPromptEl.textContent = 'click e';
-        projectsPromptEl.classList.remove('as-button');
-      }
+      projectsPromptEl.textContent = 'click e';
       const ndc = near.promptPos.clone().project(projectsWorld.camera);
       projectsPromptEl.style.left = `${(ndc.x * 0.5 + 0.5) * window.innerWidth}px`;
       projectsPromptEl.style.top  = `${(-ndc.y * 0.5 + 0.5) * window.innerHeight}px`;
       projectsPromptEl.style.display = 'block';
-      // Track the current laptop-proximity state so the click handler can
-      // gate itself to "only fires while you're standing next to the laptop"
-      projectsWorld._nearLaptopForClick = near.type === 'laptop';
 
       if (keys['e']) {
         if (!projectsWorld.eHeld) {
@@ -9601,8 +9519,6 @@ html { scroll-behavior: smooth; }
       }
     } else {
       projectsPromptEl.style.display = 'none';
-      projectsPromptEl.classList.remove('as-button');
-      projectsWorld._nearLaptopForClick = false;
       projectsWorld.eHeld = !!keys['e'];
     }
   }
