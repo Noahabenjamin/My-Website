@@ -485,6 +485,27 @@
     transform: translate(-50%, -100%);
     text-shadow: 0 0 10px rgba(0,0,0,0.6);
   }
+  /* Button-styled variant used when standing next to the laptop. */
+  #projects-prompt.as-button {
+    pointer-events: auto;
+    cursor: pointer;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-style: normal;
+    font-weight: 500;
+    font-size: 15px;
+    letter-spacing: 0.04em;
+    color: #f5efe2;
+    padding: 9px 18px;
+    background: rgba(20, 22, 28, 0.78);
+    border: 1px solid rgba(245, 239, 226, 0.5);
+    border-radius: 999px;
+    text-shadow: none;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transform: translate(-50%, -50%);
+    transition: background 0.15s ease-out, transform 0.15s ease-out;
+  }
+  #projects-prompt.as-button:hover { background: rgba(40, 44, 54, 0.92); }
   /* "back..." HTML overlay for the beach scene — perfectly straight against the screen */
   #beach-back {
     position: fixed;
@@ -4554,9 +4575,12 @@ function buildCorkBoardWithMap(opts = {}) {
   let overlayCanvas = null;
   if (realistic) {
     // ===== Modern atlas: black land on yellow water, white borders + names =====
-    // Real Natural-Earth 110m country geometry is fetched async; until it
+    // Real Natural-Earth 50m country geometry is fetched async; until it
     // lands the canvas just shows the yellow ocean + the title overlay.
-    const WATER  = '#ffe933';         // lemon yellow
+    // Title sits at the bottom over the open Southern Ocean / Antarctica
+    // edge so the top of the canvas is left clear for Scandinavia, Greenland
+    // and northern Russia.
+    const WATER  = '#fff200';         // bright lemon yellow
     const LAND   = '#000000';
     const STROKE = '#ffffff';
     function ll(lon, lat) {
@@ -4565,19 +4589,15 @@ function buildCorkBoardWithMap(opts = {}) {
     // Base layer: solid water.
     mctx.fillStyle = WATER;
     mctx.fillRect(0, 0, mw, mh);
-    // Title in dark text so it sits comfortably on the yellow water; redrawn
-    // after the land lands so it never gets covered.  The header band
-    // re-paints a yellow strip at the very top so the title never sits on
-    // top of northern Canada / Greenland islands.
+    // Title in dark text; redrawn after the land lands so it never gets
+    // covered.  Anchored at the bottom of the canvas (paired with the
+    // existing subtitle) so the northern latitudes stay fully visible.
     const tScale = mw / 1280;
-    const HEADER_H = 130 * tScale;
     function drawTitle(ctx) {
-      ctx.fillStyle = WATER;
-      ctx.fillRect(0, 0, mw, HEADER_H);
       ctx.fillStyle = '#101010';
       ctx.font = `600 ${Math.round(38 * tScale)}px "Inter", system-ui, sans-serif`;
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText('Biotech world', 40 * tScale, 78 * tScale);
+      ctx.fillText('Biotech world', 40 * tScale, mh - 28 * tScale);
       ctx.font = `300 ${Math.round(13 * tScale)}px "Inter", system-ui, sans-serif`;
       ctx.fillStyle = '#404040'; ctx.textAlign = 'right';
       ctx.fillText('hover a pin to read the city — click to see the company',
@@ -4638,9 +4658,11 @@ function buildCorkBoardWithMap(opts = {}) {
       const name = props.NAME || props.NAME_EN || props.ADMIN || props.name || '';
       return LABELED_COUNTRIES.has(name);
     }
-    // Pull Natural Earth 110m administrative-0 boundaries from jsdelivr's
-    // GitHub mirror.  ~250 KB; cached aggressively by the CDN.
-    const NE_URL = 'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@v5.1.2/geojson/ne_110m_admin_0_countries.geojson';
+    // Pull Natural Earth 50m administrative-0 boundaries from jsdelivr's
+    // GitHub mirror.  ~1.5 MB; cached aggressively by the CDN.  The higher
+    // detail keeps Scandinavian fjords, the Greek islands and SE-Asia
+    // archipelagos looking realistic.
+    const NE_URL = 'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@v5.1.2/geojson/ne_50m_admin_0_countries.geojson';
     fetch(NE_URL).then(r => r.ok ? r.json() : null).then((data) => {
       const features = data && data.features ? data.features : null;
       if (!features) return;
@@ -4686,8 +4708,6 @@ function buildCorkBoardWithMap(opts = {}) {
         const [px, py] = ll(lon, lat);
         octx.fillText(name, px, py);
       }
-      // Don't let arctic country borders bleed through the title header.
-      octx.clearRect(0, 0, mw, HEADER_H);
       if (typeof overlayTex !== 'undefined' && overlayTex) overlayTex.needsUpdate = true;
     }).catch(() => {});
   } else {
@@ -4740,9 +4760,11 @@ function buildCorkBoardWithMap(opts = {}) {
   mapTex.anisotropy = 8;
   const mapMat = new THREE.MeshStandardMaterial({ map: mapTex, roughness: 0.85 });
 
-  // Map sized to leave a small cork margin around it
+  // Map sized to leave a small cork margin around it.  Realistic atlas uses
+  // an exact 2:1 plane so the equirectangular canvas (2560×1280) lands
+  // without horizontal stretch — country outlines stay geographically true.
   const MW = BW * 0.86;
-  const MH = BH * 0.78;
+  const MH = realistic ? MW / 2 : BH * 0.78;
   const map = new THREE.Mesh(new THREE.PlaneGeometry(MW, MH), mapMat);
   map.position.set(0, PANEL_Y, BD / 2 + 0.001);
   g.add(map);
@@ -8619,6 +8641,8 @@ html { scroll-behavior: smooth; }
           cobblestone.exited = true;
           projectsWorld.entered = false;
           projectsWorld.entryT = 0;
+          projectsWorld.exiting = false;
+          projectsWorld.exitT = 0;
           projectsWorld.returning = false;
           projectsWorld.computerActive = false;
           projectsWorld.bookActive = false;
@@ -8795,6 +8819,19 @@ html { scroll-behavior: smooth; }
   projectsWorld.camLook.copy(PROJ_DEFAULT_LOOK);
   projectsWorld.camPos = PROJ_DEFAULT_CAM.clone();
 
+  // Clicking the "click to open" pill is equivalent to pressing E next to
+  // the laptop — open the computer view.  Gated to the laptop proximity
+  // flag so a stray click can't trigger it from any prompt variant.
+  projectsPromptEl.addEventListener('click', (ev) => {
+    if (!projectsPromptEl.classList.contains('as-button')) return;
+    if (!projectsWorld._nearLaptopForClick) return;
+    if (projectsWorld.computerActive) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    projectsWorld.computerActive = true;
+    projectsWorld.eHeld = true;
+  });
+
   function drawBookPage(canvas, content, isLeft) {
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
@@ -8936,6 +8973,7 @@ html { scroll-behavior: smooth; }
 
       // controls hint while reading
       projectsPromptEl.textContent = '← → flip pages   |   e to close';
+      projectsPromptEl.classList.remove('as-button');
       const above = new THREE.Vector3(book.data.x, 1.7, book.data.z - 0.55);
       const ndc = above.project(projectsWorld.camera);
       projectsPromptEl.style.left = `${(ndc.x * 0.5 + 0.5) * window.innerWidth}px`;
@@ -8967,6 +9005,7 @@ html { scroll-behavior: smooth; }
           projectsWorld.openBook.visible = false;
           if (book.meshes) for (const m of book.meshes) m.visible = true;
           projectsPromptEl.textContent = 'click e';
+          projectsPromptEl.classList.remove('as-button');
           unstickProjectsBaymax(b);
           restoreParentFocus();
         }
@@ -9021,6 +9060,7 @@ html { scroll-behavior: smooth; }
       } else {
         projectsPromptEl.textContent = '← → to move   |   e to close';
       }
+      projectsPromptEl.classList.remove('as-button');
       const above = new THREE.Vector3(crate.data.x, crate.data.s + 0.45, crate.data.z + 0.1);
       const ndcP = above.project(projectsWorld.camera);
       projectsPromptEl.style.left = `${(ndcP.x * 0.5 + 0.5) * window.innerWidth}px`;
@@ -9130,6 +9170,7 @@ html { scroll-behavior: smooth; }
             crate.interior.visible = false;
             b.visible = true;                       // re-show outer Baymax
             projectsPromptEl.textContent = 'click e';
+            projectsPromptEl.classList.remove('as-button');
             // hide whack-a-mole score / clear active target
             if (crate.gameTargets) {
               for (const t of crate.gameTargets) t.visible = false;
@@ -9169,6 +9210,7 @@ html { scroll-behavior: smooth; }
       if (laptopOpenSiteBtn) laptopOpenSiteBtn.style.display = 'block';
 
       projectsPromptEl.style.display = 'none';
+      projectsPromptEl.classList.remove('as-button');
 
       // press E or ESC to exit
       if (keys['e'] || keys['escape']) {
@@ -9305,6 +9347,7 @@ html { scroll-behavior: smooth; }
       }
 
       projectsPromptEl.style.display = 'none';
+      projectsPromptEl.classList.remove('as-button');
 
       // press E or ESC to exit straight back out to the projects world —
       // mirrors the computer / crate behaviour: one press → free to walk.
@@ -9342,6 +9385,39 @@ html { scroll-behavior: smooth; }
       animateWalk(b, projectsWorld.walkPhaseRef.value, 1.0);
       if (u >= 1) { projectsWorld.entered = true; resetWalk(b); }
       projectsPromptEl.style.display = 'none';
+      projectsPromptEl.classList.remove('as-button');
+      return;
+    }
+
+    // --- exit walk-off: keep stepping right past the boundary, off-screen ---
+    // Triggered when the player reached the right edge by walking.  The
+    // player loses control; Baymax keeps walking right until he's clear of
+    // the camera, then the stage swaps to cobble with an entry from the
+    // left edge (mirroring the original projects→cobble handoff).
+    if (projectsWorld.exiting) {
+      projectsWorld.exitT = (projectsWorld.exitT || 0) + dt;
+      const dur = 0.9;
+      const u = Math.min(1, projectsWorld.exitT / dur);
+      b.rotation.y = -Math.PI / 2;            // facing +X (walking right)
+      b.position.x = THREE.MathUtils.lerp(PROJECTS_BOUNDS.maxX - 0.05, 14, u);
+      projectsWorld.walkPhaseRef.value += dt * 14;
+      b.position.y = Math.abs(Math.sin(projectsWorld.walkPhaseRef.value)) * 0.06;
+      animateWalk(b, projectsWorld.walkPhaseRef.value, 1.0);
+      maybeFootstep(true, dt);
+      projectsPromptEl.style.display = 'none';
+      projectsPromptEl.classList.remove('as-button');
+      if (u >= 1) {
+        projectsWorld.exiting = false;
+        projectsWorld.exitT   = 0;
+        resetWalk(b);
+        cobblestone.exited    = false;
+        cobblestone.landed    = true;
+        cobblestone.landT     = COBBLE_FALL_OVER + COBBLE_LIE + COBBLE_RISE + 1.0;
+        cobblestone.entering  = true;
+        cobblestone.entryT    = 0;
+        cobblestone.entryFrom = 'left';
+        setStage('cobble');
+      }
       return;
     }
 
@@ -9365,7 +9441,14 @@ html { scroll-behavior: smooth; }
     const escapeNow       = !!keys['escape'];
     const wantsExitByEsc  = escapeNow && !projectsWorld._lastEscape;
     projectsWorld._lastEscape = escapeNow;
-    if ((wantsExitByEdge || wantsExitByEsc) && !projectsWorld.returning) {
+    if (wantsExitByEdge && !projectsWorld.returning) {
+      // Walked off the right edge → Baymax keeps walking off-screen, then
+      // re-spawns from the left of cobble.
+      projectsWorld.exiting = true;
+      projectsWorld.exitT   = 0;
+      return;
+    }
+    if (wantsExitByEsc && !projectsWorld.returning) {
       projectsWorld.returning = true;
       keys['escape'] = false;
       cobblestone.exited    = false;
@@ -9387,7 +9470,9 @@ html { scroll-behavior: smooth; }
       near = {
         type: 'laptop',
         dist: dLap,
-        promptPos: new THREE.Vector3(lp.x, lp.y + 0.55, lp.z),
+        // Sit the pill to the LEFT of the laptop in world space so it lands
+        // next to (not on top of) the computer in screen space.
+        promptPos: new THREE.Vector3(lp.x - 0.95, lp.y + 0.05, lp.z),
       };
     }
     for (const book of projectsWorld.books) {
@@ -9441,11 +9526,20 @@ html { scroll-behavior: smooth; }
     }
 
     if (near) {
-      projectsPromptEl.textContent = 'click e';
+      if (near.type === 'laptop') {
+        projectsPromptEl.textContent = 'click to open';
+        projectsPromptEl.classList.add('as-button');
+      } else {
+        projectsPromptEl.textContent = 'click e';
+        projectsPromptEl.classList.remove('as-button');
+      }
       const ndc = near.promptPos.clone().project(projectsWorld.camera);
       projectsPromptEl.style.left = `${(ndc.x * 0.5 + 0.5) * window.innerWidth}px`;
       projectsPromptEl.style.top  = `${(-ndc.y * 0.5 + 0.5) * window.innerHeight}px`;
       projectsPromptEl.style.display = 'block';
+      // Track the current laptop-proximity state so the click handler can
+      // gate itself to "only fires while you're standing next to the laptop"
+      projectsWorld._nearLaptopForClick = near.type === 'laptop';
 
       if (keys['e']) {
         if (!projectsWorld.eHeld) {
@@ -9507,6 +9601,8 @@ html { scroll-behavior: smooth; }
       }
     } else {
       projectsPromptEl.style.display = 'none';
+      projectsPromptEl.classList.remove('as-button');
+      projectsWorld._nearLaptopForClick = false;
       projectsWorld.eHeld = !!keys['e'];
     }
   }
