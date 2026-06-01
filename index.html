@@ -4520,13 +4520,11 @@ function buildCorkBoardWithMap(opts = {}) {
   const corkMat = new THREE.MeshStandardMaterial({ map: corkTex, roughness: 0.92, metalness: 0.0, bumpMap: corkTex, bumpScale: 0.01 });
 
   // ---- panel + mounting height ----
-  // Realistic board: extend the cork upward by topExt to leave room for the
-  // "Biotech world" title paper that gets pinned above the map.  The map
-  // and pins continue to use PANEL_Y so their geometry is unchanged; only
-  // the cork panel + metal frame grow taller, anchored at the same floor
-  // height (so legs stay the same length).
+  // Cork sized to match the demos board exactly (BW × BH_MAP) so the two
+  // boards read as a matched pair.  The title note now sits on the right
+  // side of the map itself, so no cork extension is needed.
   const BW = 3.2, BH_MAP = 1.6, BD = 0.04;
-  const topExt = realistic ? 0.45 : 0;
+  const topExt = 0;
   const BH_TOTAL = BH_MAP + topExt;
   const PANEL_Y = 1.55;                              // map centre
   const corkCenterY = PANEL_Y + topExt / 2;          // taller cork shifted up
@@ -5006,35 +5004,29 @@ function buildCorkBoardWithMap(opts = {}) {
     g.userData.companyPins = companyPins;
   }
 
-  // ---- title paper, pinned above the map (realistic board only) ----
-  // A small white note sitting on the cork extension above the map, held by
-  // a red tack in the top-left and top-right corner.
+  // ---- title note, pinned on the upper-right of the map (realistic only) ----
+  // A small white "biotech world map" note pinned over the top-right corner
+  // of the map.  Visible inside the E-press front-view zoom (camera looks at
+  // mapCentre at ~2m, ~1.78m visible width, so x≈+0.55 sits clearly on the
+  // right side of the framed view).
   if (realistic) {
-    const paperW = 1.55, paperH = 0.36;
-    // sit the paper centre above the map with a small gap so the paper's
-    // bottom edge doesn't touch the top of the map texture
-    const paperY = PANEL_Y + MH / 2 + paperH / 2 + 0.07;
-    const paperZ = BD / 2 + 0.0015;                  // sits in front of cork
+    const paperW = 0.58, paperH = 0.14;
+    const paperX = 0.55;
+    const paperY = PANEL_Y + MH / 2 - paperH / 2 - 0.07;   // tucked just inside top edge
+    const paperZ = BD / 2 + 0.0035;                        // in front of map + overlay
 
     const tcv = document.createElement('canvas');
-    tcv.width = 1240; tcv.height = 280;
+    tcv.width = 720; tcv.height = 180;
     const tctx = tcv.getContext('2d');
-    // White paper with a faint inner border so the edge reads on the cork
     tctx.fillStyle = '#ffffff';
     tctx.fillRect(0, 0, tcv.width, tcv.height);
     tctx.strokeStyle = 'rgba(0, 0, 0, 0.10)';
     tctx.lineWidth = 2;
-    tctx.strokeRect(10, 10, tcv.width - 20, tcv.height - 20);
-    // Title
+    tctx.strokeRect(8, 8, tcv.width - 16, tcv.height - 16);
     tctx.fillStyle = '#101010';
-    tctx.font = '600 96px "Inter", system-ui, sans-serif';
-    tctx.textAlign = 'center'; tctx.textBaseline = 'alphabetic';
-    tctx.fillText('Biotech world', tcv.width / 2, 140);
-    // Subtitle hint
-    tctx.font = '300 34px "Inter", system-ui, sans-serif';
-    tctx.fillStyle = '#404040';
-    tctx.fillText('hover a pin to read the city — click to see the company',
-                  tcv.width / 2, 210);
+    tctx.font = '600 88px "Inter", system-ui, sans-serif';
+    tctx.textAlign = 'center'; tctx.textBaseline = 'middle';
+    tctx.fillText('biotech world map', tcv.width / 2, tcv.height / 2);
     const paperTex = new THREE.CanvasTexture(tcv);
     paperTex.colorSpace = THREE.SRGBColorSpace;
     paperTex.anisotropy = 8;
@@ -5042,21 +5034,20 @@ function buildCorkBoardWithMap(opts = {}) {
       map: paperTex, roughness: 0.85, metalness: 0.0,
     });
     const paper = new THREE.Mesh(new THREE.PlaneGeometry(paperW, paperH), paperMat);
-    paper.position.set(0, paperY, paperZ);
+    paper.position.set(paperX, paperY, paperZ);
     g.add(paper);
 
-    // Two tacks in the top corners.  Reuse buildPushPin so the visual
-    // matches the pins on the map — small inset from the paper edges so
-    // they sit neatly on the corners.
-    const tackInset = 0.05;
-    const tackZ = paperZ + 0.0005;                   // just in front of paper
+    // Two tacks in the top corners of the note.
+    const tackInset = 0.025;
+    const tackZ = paperZ + 0.0005;
     const tackCorners = [
-      [-paperW / 2 + tackInset,  paperH / 2 - tackInset],
-      [ paperW / 2 - tackInset,  paperH / 2 - tackInset],
+      [paperX - paperW / 2 + tackInset, paperY + paperH / 2 - tackInset],
+      [paperX + paperW / 2 - tackInset, paperY + paperH / 2 - tackInset],
     ];
     for (const [tx, ty] of tackCorners) {
       const { group: tack } = buildPushPin();
-      tack.position.set(tx, paperY + ty, tackZ);
+      tack.scale.setScalar(0.6);
+      tack.position.set(tx, ty, tackZ);
       g.add(tack);
     }
   }
@@ -6198,6 +6189,32 @@ function buildBiotechDemoBoard() {
   const card = new THREE.Mesh(new THREE.PlaneGeometry(MW, MH), cardMat);
   card.position.set(0, PANEL_Y, BD / 2 + 0.001);
   g.add(card);
+
+  // Invisible hit-plane covering the rendered "simedo.work" link so the text
+  // itself is clickable (in addition to the "click to open" pill).  Padded
+  // a touch around the text + underline for a forgiving hit area.
+  const pad = 12;
+  const hitMinX = (1230 - linkW) - pad;
+  const hitMaxX = 1230 + pad;
+  const hitMinY = (linkY - 40) - pad;             // ~font height above baseline
+  const hitMaxY = (linkY + 6 + 3) + pad;          // underline bottom
+  const hitCXcv = (hitMinX + hitMaxX) / 2;
+  const hitCYcv = (hitMinY + hitMaxY) / 2;
+  const hitWcv  = hitMaxX - hitMinX;
+  const hitHcv  = hitMaxY - hitMinY;
+  // canvas (1280×640) → card-local (MW × MH), card centered at (0, PANEL_Y).
+  const hitLX = (hitCXcv / 1280) * MW - MW / 2;
+  const hitLY = MH / 2 - (hitCYcv / 640) * MH;
+  const hitW  = (hitWcv  / 1280) * MW;
+  const hitH  = (hitHcv  / 640)  * MH;
+  const simedoHit = new THREE.Mesh(
+    new THREE.PlaneGeometry(hitW, hitH),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+  );
+  simedoHit.position.set(hitLX, PANEL_Y + hitLY, BD / 2 + 0.003);
+  simedoHit.userData.isSimedoLink = true;
+  g.add(simedoHit);
+  g.userData.simedoLinkMesh = simedoHit;
 
   // ---- Build + mount the 7 demos ----
   // Layout: 4 across in the top row, 3 across in the bottom row.
@@ -7511,6 +7528,17 @@ html { scroll-behavior: smooth; }
     if (idx == null) return null;
     return board.demoItems[idx];
   }
+  function _demoSimedoLinkAt(clientX, clientY) {
+    if (!projectsWorld.boardActive) return false;
+    const board = projectsWorld.activeBoard;
+    if (!board || !board.demoBoard) return false;
+    const mesh = board.group && board.group.userData.simedoLinkMesh;
+    if (!mesh) return false;
+    _demoNDC.x = (clientX / window.innerWidth)  * 2 - 1;
+    _demoNDC.y = -(clientY / window.innerHeight) * 2 + 1;
+    _demoRaycaster.setFromCamera(_demoNDC, projectsWorld.camera);
+    return _demoRaycaster.intersectObject(mesh, false).length > 0;
+  }
 
   function _demoOpen(item) {
     projectsWorld.demoActive = true;
@@ -7583,9 +7611,14 @@ html { scroll-behavior: smooth; }
       dmEl.style.transform = '';
       _demoHoverIdx = hit.idx;
       document.body.style.cursor = 'pointer';
+    } else if (_demoSimedoLinkAt(ev.clientX, ev.clientY)) {
+      if (_demoHoverIdx !== -1) { dmEl.classList.remove('as-tooltip'); _demoHoverIdx = -1; }
+      document.body.style.cursor = 'pointer';
     } else if (_demoHoverIdx !== -1) {
       dmEl.classList.remove('as-tooltip');
       _demoHoverIdx = -1;
+      document.body.style.cursor = '';
+    } else if (document.body.style.cursor === 'pointer') {
       document.body.style.cursor = '';
     }
   });
@@ -7624,6 +7657,12 @@ html { scroll-behavior: smooth; }
     if (!projectsWorld.boardActive) return;
     const board = projectsWorld.activeBoard;
     if (!board || !board.demoBoard) return;
+    // The rendered "simedo.work" link on the card is its own click target —
+    // hits there open the project page in a new tab (same as the pill).
+    if (_demoSimedoLinkAt(ev.clientX, ev.clientY)) {
+      try { window.open('https://simedo.work/', '_blank', 'noopener'); } catch (_) {}
+      return;
+    }
     const hit = _demoItemAt(ev.clientX, ev.clientY);
     if (hit) _demoOpen(hit);
   });
