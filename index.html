@@ -7352,8 +7352,9 @@ html { scroll-behavior: smooth; }
       resetHead(projectsWorld.baymax);
       setStage('projects');
     } else if (target === 'contact') {
-      // LinkedIn portal — spawn from the top-left, facing the logo.
-      linkedin.baymax.position.set(-8, 0, -8);
+      // LinkedIn portal — spawn just above-and-left of the logo, ~3-4
+      // Baymax-widths out diagonally, facing the logo.
+      linkedin.baymax.position.set(-3.0, 0, -3.0);
       linkedin.baymax.rotation.set(0, Math.PI / 4, 0);   // face toward (0,0,0)
       linkedin.entered = true;
       linkedin.entryT  = 0;
