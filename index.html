@@ -6151,12 +6151,15 @@ function buildBiotechDemoBoard() {
   // Underline the link to reinforce the "press to open" hint.
   const linkW = tctx.measureText(linkText).width;
   tctx.fillRect(1230 - linkW, linkY + 6, linkW, 3);
-  // "← click here" hint immediately to the left of the link text.
-  const hintText = '← click here';
-  const hintRightX = 1230 - linkW - 16;
-  tctx.font = 'italic 600 24px "Inter", system-ui, sans-serif';
-  tctx.fillStyle = '#1d6fe8';
-  tctx.fillText(hintText, hintRightX, linkY - 4);
+  // "↖ click here" hint sitting below the link, right-aligned to the same
+  // edge so the up-left arrow visually points back toward the link.  Small
+  // italic Cormorant for an artsy handwritten-note feel.
+  const hintText = '↖ click here';
+  const hintRightX = 1230;
+  const hintY = linkY + 48;
+  tctx.font = 'italic 500 22px "Cormorant Garamond", Georgia, serif';
+  tctx.fillStyle = '#1a1a1a';
+  tctx.fillText(hintText, hintRightX, hintY);
   const hintW = tctx.measureText(hintText).width;
   const cardTex = new THREE.CanvasTexture(tcv);
   cardTex.colorSpace = THREE.SRGBColorSpace;
@@ -6167,14 +6170,16 @@ function buildBiotechDemoBoard() {
   card.position.set(0, PANEL_Y, BD / 2 + 0.001);
   g.add(card);
 
-  // Invisible hit-plane covering the rendered "← click here" hint AND the
-  // simedo.work link, so the whole cluster is one clickable target.  Padded
-  // around the text + underline for a forgiving hit area.
+  // Invisible hit-plane covering both the link and the "↖ click here" hint
+  // below it, so the whole cluster is one clickable target.  Padded around
+  // the text for a forgiving hit area.
   const pad = 12;
-  const hitMinX = (hintRightX - hintW) - pad;
+  const linkLeftX = 1230 - linkW;
+  const hintLeftX = hintRightX - hintW;
+  const hitMinX = Math.min(linkLeftX, hintLeftX) - pad;
   const hitMaxX = 1230 + pad;
-  const hitMinY = (linkY - 40) - pad;             // ~font height above baseline
-  const hitMaxY = (linkY + 6 + 3) + pad;          // underline bottom
+  const hitMinY = (linkY - 40) - pad;             // top of link text
+  const hitMaxY = (hintY + 8) + pad;              // bottom of hint baseline
   const hitCXcv = (hitMinX + hitMaxX) / 2;
   const hitCYcv = (hitMinY + hitMaxY) / 2;
   const hitWcv  = hitMaxX - hitMinX;
