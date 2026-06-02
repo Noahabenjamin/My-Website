@@ -155,6 +155,61 @@
     user-select: none;
   }
   #menu-dropdown.open { display: block; }
+  /* Top tab bar separating "Sound & controls" and "Worlds" panels. */
+  #menu-dropdown .menu-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid rgba(245,239,226,0.18);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+  #menu-dropdown .menu-tab {
+    flex: 1;
+    padding: 6px 8px;
+    background: transparent;
+    color: rgba(245,239,226,0.55);
+    border: none;
+    border-radius: 6px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  #menu-dropdown .menu-tab:hover { color: rgba(245,239,226,0.85); }
+  #menu-dropdown .menu-tab.active {
+    color: #f5efe2;
+    background: rgba(255,255,255,0.08);
+  }
+  #menu-dropdown .menu-tab-panel.hidden { display: none; }
+  /* Worlds list under the "Worlds" tab. */
+  #menu-dropdown .worlds-list {
+    margin: 0; padding: 0;
+    list-style: none;
+  }
+  #menu-dropdown .worlds-list li + li { margin-top: 1px; }
+  #menu-dropdown .world-link {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 5px 8px;
+    color: #f5efe2;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 16px;
+    letter-spacing: 0.03em;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  #menu-dropdown .world-link:hover { background: rgba(255,255,255,0.08); }
+  #menu-dropdown .worlds-list .world-sub { padding-left: 16px; }
+  #menu-dropdown .worlds-list .world-sub .world-link {
+    color: rgba(245,239,226,0.85);
+    font-size: 14.5px;
+  }
   #menu-dropdown .menu-heading {
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 10px;
@@ -864,27 +919,43 @@
   <span></span><span></span><span></span>
 </button>
 <div id="menu-dropdown" aria-hidden="true">
-  <div class="menu-section">
-    <div class="menu-heading">Sound</div>
-    <div class="sound-row">
-      <button id="vol-icon" type="button" aria-label="toggle mute">
-        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-          <path d="M2.5 6h2.7l3.6-3v10L5.2 10H2.5z"/>
-          <path d="M10.3 5.4c.95.83 1.55 2 1.55 3.1s-.6 2.27-1.55 3.1" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
-          <path d="M11.9 3.7c1.55 1.35 2.5 3.25 2.5 5.3s-.95 3.95-2.5 5.3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
-        </svg>
-      </button>
-      <input id="vol-slider" type="range" min="0" max="100" value="80" aria-label="volume">
+  <div class="menu-tabs">
+    <button class="menu-tab active" data-tab="settings" type="button">Sound &amp; controls</button>
+    <button class="menu-tab" data-tab="worlds" type="button">Worlds</button>
+  </div>
+  <div class="menu-tab-panel" data-tab="settings">
+    <div class="menu-section">
+      <div class="menu-heading">Sound</div>
+      <div class="sound-row">
+        <button id="vol-icon" type="button" aria-label="toggle mute">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M2.5 6h2.7l3.6-3v10L5.2 10H2.5z"/>
+            <path d="M10.3 5.4c.95.83 1.55 2 1.55 3.1s-.6 2.27-1.55 3.1" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+            <path d="M11.9 3.7c1.55 1.35 2.5 3.25 2.5 5.3s-.95 3.95-2.5 5.3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <input id="vol-slider" type="range" min="0" max="100" value="80" aria-label="volume">
+      </div>
+    </div>
+    <div class="menu-section">
+      <div class="menu-heading">Controls</div>
+      <ul class="controls-list">
+        <li><kbd>Shift</kbd> to sprint</li>
+        <li><kbd>Space</kbd> to jump</li>
+        <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / arrow keys to move</li>
+        <li><kbd>E</kbd> to interact</li>
+        <li><kbd>Esc</kbd> to step back</li>
+      </ul>
     </div>
   </div>
-  <div class="menu-section">
-    <div class="menu-heading">Controls</div>
-    <ul class="controls-list">
-      <li><kbd>Shift</kbd> to sprint</li>
-      <li><kbd>Space</kbd> to jump</li>
-      <li><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> / arrow keys to move</li>
-      <li><kbd>E</kbd> to interact</li>
-      <li><kbd>Esc</kbd> to step back</li>
+  <div class="menu-tab-panel hidden" data-tab="worlds">
+    <ul class="worlds-list">
+      <li><button class="world-link" data-world="homepage" type="button">Homepage</button></li>
+      <li><button class="world-link" data-world="intro" type="button">Intro page</button></li>
+      <li><button class="world-link" data-world="base" type="button">Base page</button></li>
+      <li class="world-sub"><button class="world-link" data-world="projects" type="button">– Projects</button></li>
+      <li class="world-sub"><button class="world-link" data-world="contact" type="button">– Contact</button></li>
+      <li class="world-sub"><button class="world-link" data-world="relax" type="button">– Relax</button></li>
     </ul>
   </div>
 </div>
@@ -7217,6 +7288,113 @@ html { scroll-behavior: smooth; }
     volSlider.addEventListener('click', e => e.stopPropagation());
   }
 
+  // ---- Menu tabs (Sound & controls | Worlds) ----
+  if (menuDrop) {
+    const tabBtns   = menuDrop.querySelectorAll('.menu-tab');
+    const tabPanels = menuDrop.querySelectorAll('.menu-tab-panel');
+    tabBtns.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = btn.dataset.tab;
+        tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === target));
+        tabPanels.forEach(p => p.classList.toggle('hidden', p.dataset.tab !== target));
+      });
+    });
+  }
+
+  // ---- Worlds: clicking any link teleports Baymax into that world ----
+  function navigateToWorld(target) {
+    if (target === 'homepage') {
+      // White world from the start — Baymax emerges from the hole.
+      white.crawlT = 0;
+      white.touchedHole = false;
+      white.jumpSignT = 0;
+      white.jumpSignFallStarted = false;
+      white.jumpSignAngle = 0;
+      white.jumpSignAngVel = 0;
+      white.baymax.position.copy(white.spawn);
+      white.baymax.rotation.set(0, 0, 0);
+      white.baymax.scale.setScalar(BAYMAX_SCALE);
+      if (white.emergePatch) white.emergePatch.material.opacity = 0.4;
+      setStage('intro');
+    } else if (target === 'intro') {
+      // Underwater scroll-driven introduction.
+      if (psych) { psych.splashFired = false; psych.splashEmitT = 0; }
+      setStage('psych');
+    } else if (target === 'base') {
+      // Cobble world — spawn rising up from below the ground at the centre,
+      // mirroring the very first scene's hole-emergence beat.
+      const cb = cobblestone.baymax;
+      cb.rotation.set(0, 0, 0);
+      cb.scale.setScalar(BAYMAX_SCALE);
+      resetWalk(cb);
+      resetHead(cb);
+      cobblestone.entering   = false;
+      cobblestone.entryT     = 0;
+      cobblestone.exited     = false;
+      cobblestone.landed     = true;
+      cobblestone.landT      = COBBLE_FALL_OVER + COBBLE_LIE + COBBLE_RISE + 1.2;
+      cobblestone.wordsShown = true;
+      cobblestone.emerging   = true;
+      cobblestone.emergeT    = 0;
+      cb.position.set(0, -1.2, 0);
+      const w = document.getElementById('words');
+      if (w) { w.classList.remove('instant-off'); w.classList.add('visible'); }
+      setStage('cobble');
+    } else if (target === 'projects') {
+      // Drop into the projects world at centre, fully entered.
+      projectsWorld.entered = true;
+      projectsWorld.entryT  = 0;
+      projectsWorld.returning = false;
+      projectsWorld.baymax.position.set(0, 0, 0);
+      projectsWorld.baymax.rotation.set(0, -Math.PI / 2, 0);
+      resetWalk(projectsWorld.baymax);
+      resetHead(projectsWorld.baymax);
+      setStage('projects');
+    } else if (target === 'contact') {
+      // LinkedIn portal — spawn from the top-left, facing the logo.
+      linkedin.baymax.position.set(-8, 0, -8);
+      linkedin.baymax.rotation.set(0, Math.PI / 4, 0);   // face toward (0,0,0)
+      linkedin.entered = true;
+      linkedin.entryT  = 0;
+      linkedin.returning = false;
+      linkedin.progress  = 0;
+      linkedin.redirected = false;
+      if (linkedin.ringMat) linkedin.ringMat.uniforms.uProgress.value = 0;
+      resetWalk(linkedin.baymax);
+      resetHead(linkedin.baymax);
+      setStage('linkedin');
+    } else if (target === 'relax') {
+      // Beach world — reset to the standard chair-entry sequence.
+      beach.phase = 'enter';
+      beach.phaseT = 0;
+      beach.satMarked = false;
+      beach.satTime = -1;
+      if (beach.backOpacities) beach.backOpacities.fill(0);
+      if (typeof resetBeachBack === 'function') resetBeachBack();
+      beach.baymax.position.set(4.0, 0, 3.5);
+      beach.baymax.rotation.set(0, -Math.PI * 0.7, 0);
+      resetWalk(beach.baymax);
+      resetHead(beach.baymax);
+      if (beach.cocktail && beach.cocktailStart) {
+        beach.cocktail.position.copy(beach.cocktailStart);
+        beach.cocktail.rotation.set(0, 0, 0);
+      }
+      setStage('beach');
+    }
+    // Close the menu after picking a destination.
+    if (menuDrop) menuDrop.classList.remove('open');
+    if (menuBtn)  menuBtn.classList.remove('open');
+  }
+  if (menuDrop) {
+    menuDrop.querySelectorAll('.world-link').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigateToWorld(btn.dataset.world);
+      });
+    });
+  }
+
   // stages: 'intro' (controllable), 'fall' (cinematic, in white world),
   //         'psych' (trip), 'cobble' (controllable), 'beach' (cinematic)
   let stage = 'intro';
@@ -8512,6 +8690,27 @@ html { scroll-behavior: smooth; }
 
     // Re-entry from a portal world.  Walk in from off-screen on whichever
     // side he came from, then hand control to the player.
+    if (cobblestone.emerging) {
+      // Bottom-up emergence at the cobble centre — mirrors the white-world
+      // hole-crawl, used when the player jumps in via the menu's "Base page".
+      cobblestone.emergeT = (cobblestone.emergeT || 0) + dt;
+      const dur = 1.8;
+      const u = Math.min(1, cobblestone.emergeT / dur);
+      const eased = 1 - Math.pow(1 - u, 3);
+      b.scale.setScalar(BAYMAX_SCALE);
+      b.rotation.set(0, 0, 0);
+      b.position.set(0, THREE.MathUtils.lerp(-1.2, 0, eased), 0);
+      resetWalk(b);
+      resetHead(b);
+      applyStdCobbleCam();
+      if (u >= 1) {
+        cobblestone.emerging = false;
+        cobblestone.emergeT  = 0;
+        b.position.y = 0;
+      }
+      return;
+    }
+
     if (cobblestone.entering) {
       cobblestone.entryT = (cobblestone.entryT || 0) + dt;
       const dur = 1.6;
